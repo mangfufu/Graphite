@@ -228,7 +228,7 @@ export default function Toolbar({ editor, onSearchToggle }: ToolbarProps) {
           const nextN = maxN + 1
           const id = String(nextN)
           const cursorPos = editor.state.selection.$from.pos
-          const fnNode = editor.schema.nodes.footnote.create({ id, n: id, content: '脚注内容' })
+          const fnNode = editor.schema.nodes.footnote.create({ id, content: '脚注内容' })
           editor.chain().focus().insertContentAt(cursorPos, fnNode).run()
           const end = editor.state.doc.content.size
           editor.chain().focus().insertContentAt(end, [

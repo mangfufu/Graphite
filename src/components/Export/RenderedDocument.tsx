@@ -19,11 +19,8 @@ import './export-render.css'
 /* ── helpers ─────────────────────────────────────────────── */
 
 function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize))
-  }
+  var binary = ''
+  for (var i = 0; i < bytes.length; i++) { binary += String.fromCharCode(bytes[i]) }
   return btoa(binary)
 }
 

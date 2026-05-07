@@ -1,8 +1,4 @@
 @import 'katex/dist/katex.min.css';
-@import './components/Theme/themes/warm.css';
-@import './components/Theme/themes/forest.css';
-@import './components/Theme/themes/ocean.css';
-@import './components/Theme/themes/sepia.css';
 
 @tailwind base;
 @tailwind components;
