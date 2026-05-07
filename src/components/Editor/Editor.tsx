@@ -38,6 +38,7 @@ turndownService.use(gfm)
 turndownService.addRule('horizontalRule', { filter: 'hr', replacement: () => '\n\n---\n\n' })
 let previewSuppressUntil = 0
 
+const BLANK_MARKER = '◇BLANK◇'
 const _previewImageSrc = { current: null as string | null }
 const IMAGE_PREVIEW_EVENT = 'graphite:image-preview'
 
@@ -93,6 +94,8 @@ function mdToHtml(md: string): string {
   h = h.replace(/^\[\^([\w-]+)\]:\s*(.*)$/gm, '<sup data-footnote="$1">[$1]: $2</sup>')
   h = h.replace(/^(?:(\S[^:]*?)\n:\s*(.*?)(?=\n\n|\n[^\s]|$))/gm, '<dl><dt>$1</dt><dd>$2</dd></dl>')
   h = marked.parse(h, { breaks: true, gfm: true }) as string
+  h = h.split('<p>' + BLANK_MARKER + '</p>').join('<p class="graphite-blank"><br></p>')
+  h = h.split(BLANK_MARKER).join('')
   h = h.replace(/```mermaid\n?([\s\S]*?)```/g, function(_, c) { return '<pre class="mermaid-container" data-mermaid-src="' + encodeURIComponent(c.trim()) + '"><code>' + c.trim() + '</code></pre>' })
   h = h.replace(/<!--KTHB(\d+)-->/g, function(_, i) { var f = bm[parseInt(i)]; return '<div data-math-block="' + encodeHtmlEntities(f) + '" class="math-block">' + katex.renderToString(f, { displayMode: true, throwOnError: false }) + '</div>' })
   h = h.replace(/<!--KTHI(\d+)-->/g, function(_, i) { var f = im[parseInt(i)]; return '<span data-math-inline="' + encodeHtmlEntities(f) + '">' + katex.renderToString(f, { throwOnError: false }) + '</span>' })
@@ -103,11 +106,18 @@ function htmlToMd(html: string): string {
   var div = document.createElement('div'); div.innerHTML = html
   div.querySelectorAll('p').forEach(function(p) { if (p.querySelector('[data-footnote-ref]')) p.remove() })
   div.querySelectorAll('.footnote-def').forEach(function(el) { el.remove() })
-  return turndownService.turndown(div.innerHTML)
+  // Preserve empty paragraphs as BLANK_MARKER (turndown strips them)
+  div.querySelectorAll('p').forEach(function(p) {
+    var inner = p.innerHTML.replace(/\s/g, '')
+    if (!inner || inner === '<br>' || inner === '<br/>') { p.innerHTML = BLANK_MARKER }
+  })
+  return turndownService.turndown(div.innerHTML).split(BLANK_MARKER).join(' ' + BLANK_MARKER + ' ')
+    .replace(/ {2,}/g, ' ').trim()
 }
 
 turndownService.addRule('mathInline', { filter: function(n) { return (n as HTMLElement).hasAttribute?.('data-math-inline') ?? false }, replacement: function(_c: string, n: any) { return '$' + (n.getAttribute('data-math-inline') || n.textContent || '') + '$' } })
 turndownService.addRule('mathBlock', { filter: function(n) { return (n as HTMLElement).hasAttribute?.('data-math-block') ?? false }, replacement: function(_c: string, n: any) { return '\n\n$$' + (n.getAttribute('data-math-block') || '') + '$$' } })
+turndownService.addRule('underline', { filter: 'u', replacement: function(_c: string) { return '<u>' + _c + '</u>' } })
 turndownService.addRule('highlight', { filter: 'mark', replacement: function(_c: string, n: any) { return '==' + (n.innerHTML || '') + '==' } })
 turndownService.addRule('footnote', { filter: function(n) { return (n as HTMLElement).classList?.contains('footnote-def') ?? false }, replacement: function(_c: string, n: any) { return '\n\n[^' + (n.getAttribute('data-footnote-id') || '') + ']: ' + (n.textContent || '') } })
 
@@ -123,7 +133,12 @@ export default function Editor() {
 
   const processedHtml = useMemo(function() {
     if (!currentContent) return ''
-    try { return isHtmlFile(currentFilePath) ? currentContent : mdToHtml(currentContent) } catch { return currentContent }
+    try {
+      var h = isHtmlFile(currentFilePath) ? currentContent : mdToHtml(currentContent)
+      // Strip stale asset.localhost URLs (Tauri dev asset protocol may not be available)
+      h = h.replace(/src="https?:\/\/asset\.localhost\/[^"]*"/g, 'src="" alt="[图片加载失败]"')
+      return h
+    } catch { return currentContent }
   }, [currentContent, currentFilePath])
 
   const serializeEditorContent = useCallback(function(html: string) {
@@ -213,7 +228,7 @@ export default function Editor() {
       if (!ed) return
       var currentMd = serializeEditorContent(ed.getHTML())
       var store = useFileStore.getState()
-      if (normalizeLineEndings(currentMd) === normalizeLineEndings(serializeStoredContent(store.originalContent))) return
+      if (normalizeLineEndings(currentMd).replace(/◇BLANK◇/g, '').trim() === normalizeLineEndings(serializeStoredContent(store.originalContent)).replace(/◇BLANK◇/g, '').trim()) return
       store.setSaveStatus('unsaved')
       useFileStore.setState({ isDirty: true })
       setStats({ chars: ed.storage.characterCount.characters(), words: ed.storage.characterCount.words() })
@@ -264,7 +279,7 @@ export default function Editor() {
     window.addEventListener('keydown', fn)
     return function() { window.removeEventListener('keydown', fn) }
   }, [previewImage, closePreview])
-  useEffect(function() { if (!editor || !currentFilePath) return; var offset = loadSessionCursor(currentFilePath); if (offset !== null && offset > 0) { setTimeout(function() { try { editor!.commands.setTextSelection(offset!) } catch {} }, 0) }; var scroll = loadSessionScroll(currentFilePath); if (scroll !== null && scroll > 0) { requestAnimationFrame(function() { var ed2 = editor; if (!ed2) return; var s = ed2.view.dom.closest('.overflow-y-auto') as HTMLElement; if (s) s.scrollTop = scroll! }) } }, [editor, currentFilePath])
+  useEffect(function() { if (!editor || !currentFilePath) return; var offset = loadSessionCursor(currentFilePath); if (offset !== null && offset > 0) { setTimeout(function() { try { var $pos = editor!.state.doc.resolve(offset!); if ($pos.parent.isTextblock) editor!.commands.setTextSelection(offset!) } catch {} }, 0) }; var scroll = loadSessionScroll(currentFilePath); if (scroll !== null && scroll > 0) { requestAnimationFrame(function() { var ed2 = editor; if (!ed2) return; var s = ed2.view.dom.closest('.overflow-y-auto') as HTMLElement; if (s) s.scrollTop = scroll! }) } }, [editor, currentFilePath])
   useEffect(function() { if (!editor) return; function fn() { var path = useFileStore.getState().currentFilePath; if (path) saveSessionCursor(path, editor!.state.selection.from) }; editor.on('selectionUpdate', fn); return function() { editor.off('selectionUpdate', fn) } }, [editor])
   useEffect(function() {
     if (!editor || !currentFilePath) return
