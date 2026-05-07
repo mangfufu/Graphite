@@ -1,0 +1,282 @@
+@import 'katex/dist/katex.min.css';
+@import './components/Theme/themes/warm.css';
+@import './components/Theme/themes/forest.css';
+@import './components/Theme/themes/ocean.css';
+@import './components/Theme/themes/sepia.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-sidebar: #f5f5f5;
+  --bg-titlebar: #f0f0f0;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --accent: #4a90d9;
+  --accent-hover: #357abd;
+  --border: #e5e5e5;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', monospace;
+  --font-body: 'Noto Sans SC', 'Segoe UI', system-ui, sans-serif;
+  --editor-max-width: 720px;
+  --titlebar-height: 32px;
+}
+
+.dark {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-sidebar: #0f1629;
+  --bg-titlebar: #0d1117;
+  --text-primary: #e1e1e1;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+  --accent: #6d9eeb;
+  --accent-hover: #8bb4f0;
+  --border: #2a2a3e;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Editor content typography */
+.prose {
+  color: var(--text-primary);
+  line-height: var(--editor-line-height, 1.7);
+  font-size: var(--editor-font-size, 0.9375rem);
+}
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.prose p { color: var(--text-primary); }
+.prose strong { color: var(--text-primary); font-weight: 600; }
+.prose a { color: var(--accent); cursor: pointer; }
+.prose blockquote {
+  color: var(--text-secondary);
+  border-left-color: var(--accent);
+}
+.prose code {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  padding: 0.15em 0.3em;
+  border-radius: 3px;
+  font-size: 0.875em;
+}
+.prose pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.prose img { border-radius: 4px; }
+
+/* Pointer cursor on clickable elements in the editor */
+.ProseMirror img { cursor: pointer; }
+.ProseMirror sup[data-footnote] { cursor: pointer; }
+.prose dl { margin: 0.5em 0; }
+.prose dt { font-weight: 600; color: var(--text-primary); margin-top: 0.25em; }
+.prose dd { margin-left: 1.5em; color: var(--text-secondary); }
+.prose table {
+  border-collapse: collapse;
+  border-color: var(--border);
+  width: 100%;
+}
+.prose th, .prose td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+}
+.prose th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+.prose ul, .prose ol { color: var(--text-primary); }
+.prose li::marker { color: var(--text-muted); }
+.prose hr { border-color: var(--border); }
+
+/* TipTap placeholder */
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--text-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror {
+  min-height: 100%;
+  outline: none;
+}
+
+/* Fix invisible selection highlight in tables and editor content.
+   body has user-select: none, which can suppress ::selection rendering in some contexts. */
+.ProseMirror ::selection,
+.ProseMirror *::selection {
+  background: rgba(74, 144, 217, 0.3);
+}
+
+.dark .ProseMirror ::selection,
+.dark .ProseMirror *::selection {
+  background: rgba(109, 158, 235, 0.4);
+}
+
+/* Ensure table cells allow text selection despite body user-select: none */
+.ProseMirror td,
+.ProseMirror th {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* ===== Global cursor styles ===== */
+
+/* All buttons should show pointer cursor */
+button { cursor: pointer; }
+
+/* File tree items */
+.file-tree-item { cursor: pointer; }
+
+/* Titlebar - drag region itself is not pointer */
+[data-tauri-drag-region] { cursor: default; }
+/* But buttons inside the titlebar drag region should still be pointer */
+[data-tauri-drag-region] button { cursor: pointer; }
+
+/* ===== Editor (.prose) cursor styles ===== */
+
+.prose button, .prose a { cursor: pointer; }
+
+/* Table column resize handle (prosemirror-tables) */
+.prose .column-resize-handle { cursor: col-resize; }
+
+/* Resize cursor on editor wrapper during column resize hover/drag (prosemirror-tables) */
+.prose.resize-cursor { cursor: col-resize; }
+
+/* ===== Search highlight decorations ===== */
+
+.search-match {
+  background-color: rgba(255, 255, 0, 0.35);
+  border-radius: 2px;
+}
+
+.search-match-active {
+  background-color: rgba(255, 165, 0, 0.45);
+  border-radius: 2px;
+}
+
+.dark .search-match {
+  background-color: rgba(255, 255, 0, 0.18);
+}
+
+.dark .search-match-active {
+  background-color: rgba(255, 165, 0, 0.3);
+}
+
+/* ===== Mermaid diagram styles ===== */
+
+.mermaid-wrapper {
+  margin: 1em 0;
+  display: flex;
+  justify-content: center;
+  padding: 1em;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-x: auto;
+  min-height: 60px;
+  cursor: default;
+  user-select: none;
+}
+
+.mermaid-loading {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+}
+
+.mermaid-error {
+  color: #e74c3c;
+  font-size: 0.85rem;
+  padding: 0.75em 1em;
+  border: 1px solid #e74c3c;
+  border-radius: 4px;
+  background: rgba(231, 76, 60, 0.08);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  width: 100%;
+}
+
+/* Selected atom node outline */
+.ProseMirror .ProseMirror-selectednode.math-block,
+.ProseMirror .ProseMirror-selectednode[data-math-block] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ===== Math formula styles ===== */
+
+/* Inline math ($...$) — KaTeX renders inside; container needs no font overrides */
+[data-math-inline] {
+  white-space: nowrap;
+}
+
+/* Block math ($$...$$) — centered container for KaTeX */
+.math-block {
+  text-align: center;
+  margin: 0.75em 0;
+  cursor: default;
+  overflow-x: auto;
+}
+
+/* ===== Footnote definition styles ===== */
+
+.footnote-def,
+p:has(span[data-footnote-ref]) {
+  font-size: 0.875em;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  padding-top: 0.5em;
+  margin-top: 1em;
+}
+
+[data-footnote-ref] {
+  color: var(--accent);
+  cursor: pointer;
+}

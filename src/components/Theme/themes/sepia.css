@@ -1,0 +1,26 @@
+/* Sepia theme -- paper/sepia-like tones reminiscent of aged paper */
+.theme-sepia {
+  --bg-primary: #f8f0e3;
+  --bg-secondary: #f0e6d4;
+  --bg-sidebar: #e8dcc8;
+  --bg-titlebar: #e0d4be;
+  --text-primary: #4a3a2a;
+  --text-secondary: #7a6a52;
+  --text-muted: #aa9a82;
+  --accent: #b8884a;
+  --accent-hover: #a07840;
+  --border: #d0c4b0;
+}
+
+.dark.theme-sepia {
+  --bg-primary: #2a221a;
+  --bg-secondary: #3a2e22;
+  --bg-sidebar: #221c14;
+  --bg-titlebar: #1c1610;
+  --text-primary: #dcd0c0;
+  --text-secondary: #aa9a82;
+  --text-muted: #7a6a52;
+  --accent: #c89850;
+  --accent-hover: #d8a860;
+  --border: #4a3e2e;
+}

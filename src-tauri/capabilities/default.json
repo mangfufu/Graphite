@@ -1,0 +1,24 @@
+{
+  "identifier": "default",
+  "description": "Default capability set",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-start-dragging",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-confirm",
+    "opener:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-copy-file",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file"
+  ]
+}

@@ -1,0 +1,26 @@
+/* Ocean theme -- cool blue tones */
+.theme-ocean {
+  --bg-primary: #f0f5fc;
+  --bg-secondary: #e8eff8;
+  --bg-sidebar: #dce6f2;
+  --bg-titlebar: #d0dcec;
+  --text-primary: #1a2a4a;
+  --text-secondary: #4a6a8a;
+  --text-muted: #8aaaba;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --border: #c0d0e0;
+}
+
+.dark.theme-ocean {
+  --bg-primary: #0f1a2e;
+  --bg-secondary: #14243e;
+  --bg-sidebar: #0c1828;
+  --bg-titlebar: #081220;
+  --text-primary: #d0e0f0;
+  --text-secondary: #8aaac8;
+  --text-muted: #5a7a9a;
+  --accent: #60a5fa;
+  --accent-hover: #7bb8fc;
+  --border: #1a304a;
+}

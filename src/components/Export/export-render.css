@@ -1,0 +1,487 @@
+/* ============================================================
+   export-render.css — Standalone export rendering styles
+   Used by: RenderedDocument.tsx for all export paths (HTML/PDF/PNG)
+   Scoped to .export-render to avoid leaking into editor styles.
+   Also embeddable in standalone export HTML via wrapHtml().
+   ============================================================ */
+
+/* ---- Base typography ---- */
+.export-render {
+  font-family: var(--font-body, 'Noto Sans SC', 'Segoe UI', system-ui, sans-serif);
+  font-size: var(--editor-font-size, 0.9375rem);
+  line-height: var(--editor-line-height, 1.7);
+  color: var(--text-primary, #1a1a1a);
+  background: var(--bg-primary, #ffffff);
+  max-width: var(--editor-max-width, 720px);
+  margin: 0 auto;
+  padding: 1.5rem 2rem;
+  word-wrap: break-word;
+}
+
+/*
+  Defensive reset for export only.
+  Exported PNGs were still picking up broad global/custom CSS and rendering
+  almost every block with a white outline. Reset common visual effects here
+  and then opt specific elements back into borders/backgrounds below.
+*/
+.export-render,
+.export-render * ,
+.export-render *::before,
+.export-render *::after {
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.export-render :where(
+  div,
+  p,
+  span,
+  blockquote,
+  pre,
+  code,
+  table,
+  th,
+  td,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  ul,
+  ol,
+  li,
+  a,
+  strong,
+  em,
+  mark,
+  u,
+  s,
+  del,
+  dt,
+  dd,
+  label
+) {
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+}
+
+/* ---- Headings ---- */
+.export-render h1,
+.export-render h2,
+.export-render h3,
+.export-render h4,
+.export-render h5,
+.export-render h6 {
+  color: var(--text-primary, #1a1a1a);
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.export-render h1 { font-size: 2em; }
+.export-render h2 { font-size: 1.5em; }
+.export-render h3 { font-size: 1.25em; }
+.export-render h4 { font-size: 1.1em; }
+.export-render h5 { font-size: 1em; }
+.export-render h6 { font-size: 0.875em; }
+
+/* ---- Paragraphs ---- */
+.export-render p {
+  color: var(--text-primary, #1a1a1a);
+  margin: 0.5em 0;
+}
+
+/* ---- Blockquotes ---- */
+.export-render blockquote {
+  color: var(--text-secondary, #666666);
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  border-left-width: 3px !important;
+  border-left-style: solid !important;
+  border-left: 3px solid var(--accent, #4a90d9) !important;
+  margin: 0.75em 0 !important;
+  padding-left: 1em;
+}
+
+.export-render blockquote p {
+  margin: 0.25em 0;
+}
+
+/* ---- Horizontal rules ---- */
+.export-render hr {
+  border: none;
+  border-top: 1px solid var(--border, #e5e5e5);
+  margin: 1.5em 0;
+}
+
+/* ---- Code blocks ---- */
+.export-render pre {
+  background: var(--bg-secondary, #f5f5f5);
+  border-width: 1px !important;
+  border-style: solid !important;
+  border: 1px solid var(--border, #e5e5e5) !important;
+  border-radius: 6px;
+  padding: 1em;
+  overflow-x: auto;
+  font-family: var(--font-mono, 'Cascadia Code', 'JetBrains Mono', monospace);
+  font-size: 0.875em;
+  line-height: 1.5;
+  margin: 0.75em 0;
+}
+
+.export-render code {
+  color: var(--text-primary, #1a1a1a);
+  background: var(--bg-secondary, #f5f5f5);
+  padding: 0.15em 0.3em;
+  border-radius: 3px;
+  font-size: 0.875em;
+  font-family: var(--font-mono, 'Cascadia Code', 'JetBrains Mono', monospace);
+}
+
+.export-render pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* ---- Syntax highlighting (light theme - GitHub-inspired) ---- */
+.export-render .hljs-keyword,
+.export-render .hljs-selector-tag,
+.export-render .hljs-built_in,
+.export-render .hljs-type,
+.export-render .hljs-literal {
+  color: #d73a49;
+}
+
+.export-render .hljs-title,
+.export-render .hljs-title.class_,
+.export-render .hljs-title.class_.inherited__,
+.export-render .hljs-title.function_ {
+  color: #6f42c1;
+}
+
+.export-render .hljs-number,
+.export-render .hljs-attribute {
+  color: #005cc5;
+}
+
+.export-render .hljs-string,
+.export-render .hljs-addition {
+  color: #032f62;
+}
+
+.export-render .hljs-comment,
+.export-render .hljs-quote {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.export-render .hljs-variable,
+.export-render .hljs-template-variable,
+.export-render .hljs-params {
+  color: #e36209;
+}
+
+.export-render .hljs-regexp,
+.export-render .hljs-link {
+  color: #032f62;
+}
+
+.export-render .hljs-tag,
+.export-render .hljs-name {
+  color: #22863a;
+}
+
+.export-render .hljs-selector-id,
+.export-render .hljs-selector-class {
+  color: #6f42c1;
+}
+
+.export-render .hljs-meta {
+  color: #005cc5;
+}
+
+.export-render .hljs-deletion {
+  color: #b31d28;
+}
+
+.export-render .hljs-emphasis {
+  font-style: italic;
+}
+
+.export-render .hljs-strong {
+  font-weight: 600;
+}
+
+/* ---- Syntax highlighting (dark theme - GitHub Dark-inspired) ---- */
+.dark .export-render .hljs-keyword,
+.dark .export-render .hljs-selector-tag,
+.dark .export-render .hljs-built_in,
+.dark .export-render .hljs-type,
+.dark .export-render .hljs-literal {
+  color: #ff7b72;
+}
+
+.dark .export-render .hljs-title,
+.dark .export-render .hljs-title.class_,
+.dark .export-render .hljs-title.class_.inherited__,
+.dark .export-render .hljs-title.function_ {
+  color: #d2a8ff;
+}
+
+.dark .export-render .hljs-number,
+.dark .export-render .hljs-attribute {
+  color: #79c0ff;
+}
+
+.dark .export-render .hljs-string,
+.dark .export-render .hljs-addition {
+  color: #a5d6ff;
+}
+
+.dark .export-render .hljs-comment,
+.dark .export-render .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.dark .export-render .hljs-variable,
+.dark .export-render .hljs-template-variable,
+.dark .export-render .hljs-params {
+  color: #ffa657;
+}
+
+.dark .export-render .hljs-regexp,
+.dark .export-render .hljs-link {
+  color: #a5d6ff;
+}
+
+.dark .export-render .hljs-tag,
+.dark .export-render .hljs-name {
+  color: #7ee787;
+}
+
+.dark .export-render .hljs-selector-id,
+.dark .export-render .hljs-selector-class {
+  color: #d2a8ff;
+}
+
+.dark .export-render .hljs-meta {
+  color: #79c0ff;
+}
+
+.dark .export-render .hljs-deletion {
+  color: #ffa198;
+}
+
+/* ---- Lists ---- */
+.export-render ul,
+.export-render ol {
+  color: var(--text-primary, #1a1a1a);
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.export-render li {
+  margin: 0.25em 0;
+}
+
+.export-render li::marker {
+  color: var(--text-muted, #999999);
+}
+
+/* Task lists */
+.export-render ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.export-render ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.export-render ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25em;
+}
+
+.export-render ul[data-type="taskList"] li > label input[type="checkbox"] {
+  cursor: default;
+}
+
+.export-render ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+/* ---- Tables ---- */
+.export-render table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  border-width: 0 !important;
+  border-color: var(--border, #e5e5e5);
+  width: 100%;
+  margin: 0.75em 0;
+}
+
+.export-render th,
+.export-render td {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border: 1px solid var(--border, #e5e5e5) !important;
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.export-render th {
+  background: var(--bg-secondary, #f5f5f5);
+  font-weight: 600;
+}
+
+/* ---- Images ---- */
+.export-render img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
+  margin: 0.75em auto;
+}
+
+.export-render p img {
+  display: inline;
+  vertical-align: middle;
+  margin: 0;
+}
+
+/* ---- Text marks ---- */
+.export-render mark {
+  background: #fff3a8;
+  color: inherit;
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+.dark .export-render mark {
+  background: #5a4a1a;
+  color: #e8dca8;
+}
+
+.export-render u {
+  text-decoration: underline;
+}
+
+.export-render s,
+.export-render del {
+  text-decoration: line-through;
+}
+
+.export-render strong {
+  color: var(--text-primary, #1a1a1a);
+  font-weight: 600;
+}
+
+.export-render em {
+  font-style: italic;
+}
+
+/* ---- Links ---- */
+.export-render a {
+  color: var(--accent, #4a90d9);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- Mermaid diagrams ---- */
+.export-render .mermaid-wrapper {
+  margin: 1em 0;
+  display: flex;
+  justify-content: center;
+  padding: 1em;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border, #e5e5e5) !important;
+  border-radius: 6px;
+  overflow-x: auto;
+  min-height: 60px;
+}
+
+.export-render .mermaid-loading {
+  color: var(--text-muted, #999);
+  font-size: 0.875rem;
+  font-family: var(--font-body, 'Noto Sans SC', sans-serif);
+}
+
+.export-render .mermaid-error {
+  color: #e74c3c;
+  font-size: 0.85rem;
+  padding: 0.75em 1em;
+  border: 1px solid #e74c3c !important;
+  border-radius: 4px;
+  background: rgba(231, 76, 60, 0.08);
+  font-family: var(--font-mono, 'Cascadia Code', monospace);
+  white-space: pre-wrap;
+  word-break: break-all;
+  width: 100%;
+}
+
+/* ---- Math formulas ---- */
+.export-render [data-math-inline] {
+  white-space: nowrap;
+}
+
+.export-render .math-block {
+  text-align: center;
+  margin: 0.75em 0;
+  overflow-x: auto;
+}
+
+/* ---- Footnotes ---- */
+.export-render .footnote-ref {
+  color: var(--accent, #4a90d9);
+  cursor: default;
+}
+
+.export-render .footnote-def,
+.export-render p:has(span[data-footnote-ref]) {
+  font-size: 0.875em;
+  color: var(--text-secondary, #666);
+  border-top: 1px solid var(--border, #e5e5e5) !important;
+  padding-top: 0.5em;
+  margin-top: 1em;
+}
+
+.export-render [data-footnote-ref] {
+  color: var(--accent, #4a90d9);
+}
+
+/* ---- Definition lists ---- */
+.export-render dl {
+  margin: 0.5em 0;
+}
+
+.export-render dt {
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+  margin-top: 0.25em;
+}
+
+.export-render dd {
+  margin-left: 1.5em;
+  color: var(--text-secondary, #666);
+}
+
+/* ---- Superscript / subscript ---- */
+.export-render sup,
+.export-render sub {
+  line-height: 0;
+}
+
+/* ---- Small text ---- */
+.export-render small {
+  font-size: 0.875em;
+}

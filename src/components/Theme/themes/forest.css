@@ -1,0 +1,26 @@
+/* Forest theme -- earthy green tones */
+.theme-forest {
+  --bg-primary: #f0faf0;
+  --bg-secondary: #e8f5e8;
+  --bg-sidebar: #dceddc;
+  --bg-titlebar: #d4e8d4;
+  --text-primary: #2d4a2d;
+  --text-secondary: #5a7a5a;
+  --text-muted: #8aaa8a;
+  --accent: #4a9a4a;
+  --accent-hover: #3d8a3d;
+  --border: #c0d8c0;
+}
+
+.dark.theme-forest {
+  --bg-primary: #1a2e1a;
+  --bg-secondary: #1e3a1e;
+  --bg-sidebar: #142414;
+  --bg-titlebar: #101e10;
+  --text-primary: #d0e8d0;
+  --text-secondary: #8aaa8a;
+  --text-muted: #5a7a5a;
+  --accent: #5aba5a;
+  --accent-hover: #6cca6c;
+  --border: #2a4a2a;
+}
