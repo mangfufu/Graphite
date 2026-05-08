@@ -6,6 +6,9 @@
 
 - `icon/graphite-icon-master.png`
   图标母版，透明背景。
+- `icon/graphite-icon-system.png`
+  系统图标优化源图。
+  说明：在不改造型的前提下做了更紧的有效区域裁切，当前 `ico`、favicon、Tauri 平台图标和应用内 64px 图标都基于它导出。
 - `icon/graphite-icon.svg`
   SVG 交付版。
   说明：当前是基于母版 PNG 的 SVG wrapper，可直接在支持 SVG 的场景使用，但本质仍是位图嵌入。

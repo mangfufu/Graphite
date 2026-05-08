@@ -28,15 +28,15 @@ function FileTreeNode({ entry, depth = 0 }: FileTreeNodeProps) {
     return (
       <div>
         <button
-          className="flex items-center gap-1 w-full px-2 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5 rounded text-xs text-[var(--text-primary)]"
+          className="flex items-center gap-1 w-full min-w-0 px-2 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5 rounded text-xs text-[var(--text-primary)]"
           style={{ paddingLeft: `${8 + depth * 16}px` }}
           onClick={() => setExpanded(!expanded)}
           onContextMenu={handleContextMenu}
         >
-          <span className="w-3 text-center text-[var(--text-muted)]">
+          <span className="w-3 shrink-0 text-center text-[var(--text-muted)]">
             {expanded ? '▼' : '▶'}
           </span>
-          <span className="opacity-70">
+          <span className="shrink-0 opacity-70">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               {expanded ? (
                 <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
@@ -45,7 +45,7 @@ function FileTreeNode({ entry, depth = 0 }: FileTreeNodeProps) {
               )}
             </svg>
           </span>
-          <span className="truncate">{entry.name}</span>
+          <span className="min-w-0 flex-1 truncate" title={entry.name}>{entry.name}</span>
         </button>
         {expanded && entry.children?.map((child) => (
           <FileTreeNode key={child.path} entry={child} depth={depth + 1} />
@@ -56,7 +56,7 @@ function FileTreeNode({ entry, depth = 0 }: FileTreeNodeProps) {
 
   return (
     <button
-      className={`flex items-center gap-1 w-full px-2 py-1 text-left rounded text-xs ${
+      className={`flex items-center gap-1 w-full min-w-0 px-2 py-1 text-left rounded text-xs ${
         isActive
           ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
           : 'hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-primary)]'
@@ -65,14 +65,14 @@ function FileTreeNode({ entry, depth = 0 }: FileTreeNodeProps) {
       onClick={() => openFile(entry.path)}
       onContextMenu={handleContextMenu}
     >
-      <span className="w-3" />
-      <span className="opacity-60">
+      <span className="w-3 shrink-0" />
+      <span className="shrink-0 opacity-60">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
           <polyline points="14,2 14,8 20,8" />
         </svg>
       </span>
-      <span className="truncate">{entry.name}</span>
+      <span className="min-w-0 flex-1 truncate" title={entry.name}>{entry.name}</span>
     </button>
   )
 }
