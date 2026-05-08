@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
-import { Extension, Node } from '@tiptap/core'
+import { Extension, Node, InputRule, markInputRule } from '@tiptap/core'
 import { Plugin, TextSelection } from '@tiptap/pm/state'
 import { EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
@@ -12,8 +12,8 @@ import LinkExtension from '@tiptap/extension-link'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import Highlight from '@tiptap/extension-highlight'
-import Typography from '@tiptap/extension-typography'
 import CharacterCount from '@tiptap/extension-character-count'
+import Typography from '@tiptap/extension-typography'
 import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import { common, createLowlight } from 'lowlight'
@@ -86,7 +86,7 @@ const LinkOpener = Extension.create({ name: 'linkOpener', addProseMirrorPlugins(
     if (Date.now() < previewSuppressUntil) { event.preventDefault(); return true }
     const t = event.target as HTMLElement
     const a = t.closest('a')
-    if (a?.href?.startsWith('http')) { event.preventDefault(); import('@tauri-apps/plugin-opener').then((m) => m.openUrl(a!.href)); return true }
+    if (a?.href?.startsWith('http')) { event.preventDefault(); event.stopPropagation(); import('@tauri-apps/plugin-opener').then((m) => m.openUrl(a!.href)); return true }
     const i = t.closest('img')
     if (i?.src) { event.preventDefault(); _previewImageSrc.current = i.src; window.dispatchEvent(new CustomEvent(IMAGE_PREVIEW_EVENT)); return true }
     const s = t.closest('sup[data-footnote-ref]')
@@ -130,6 +130,74 @@ const FootnoteNode = Node.create({
   },
 })
 const SlashDetector = Extension.create({ name: 'slashDetector', addProseMirrorPlugins() { return [new Plugin({ props: { handleKeyDown: (view, event) => { if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { const { $from } = view.state.selection; if ($from.parentOffset === 1) window.dispatchEvent(new CustomEvent('graphite:slash-opened', { detail: { view, pos: $from.pos } })) }; return false } } })] } })
+const FootnoteInputHandler = Extension.create({ name: 'footnoteInput', addProseMirrorPlugins() { return [new Plugin({ props: { handleKeyDown: (view, event) => {
+  var { $from } = view.state.selection
+  // LEFT at start of footnote content → skip to paragraph before
+  if (event.key === 'ArrowLeft' && $from.parentOffset === 0 && $from.node($from.depth - 1)?.type.name === 'footnote') {
+    event.preventDefault()
+    var beforePos = $from.before($from.depth - 1)
+    var sel = TextSelection.near(view.state.doc.resolve(Math.max(0, beforePos - 1)))
+    view.dispatch(view.state.tr.setSelection(sel))
+    return true
+  }
+  // Backspace after footnoteRef → select it so next backspace deletes it
+  if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+    var prevNode = view.state.doc.nodeAt($from.pos - 1)
+    if (prevNode?.type.name === 'footnoteRef') {
+      event.preventDefault()
+      var trBs = view.state.tr
+      trBs.setSelection(TextSelection.create(view.state.doc, $from.pos - 1, $from.pos))
+      view.dispatch(trBs)
+      return true
+    }
+  }
+  // DELETE near footnote nodes → prevent unwanted block joining
+  if (event.key === 'Delete' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+    var prevNode2 = view.state.doc.nodeAt($from.pos - 1)
+    var nextNode2 = view.state.doc.nodeAt($from.pos)
+    if (prevNode2?.type.name === 'footnote' || prevNode2?.type.name === 'footnoteRef' || nextNode2?.type.name === 'footnoteRef') {
+      event.preventDefault()
+      return true
+    }
+  }
+  if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false
+  var textBefore = $from.parent.textContent.slice(0, $from.parentOffset)
+  // Check [^id]: at end → create footnote definition
+  var defMatch = textBefore.match(/\[\^([\w-]+)\]:\s*$/)
+  if (defMatch) {
+    event.preventDefault()
+    var trDef = view.state.tr
+    var defStart = $from.pos - textBefore.length
+    trDef.replaceWith(defStart, $from.pos, view.state.schema.nodes.footnote!.create({ id: defMatch[1] }, view.state.schema.text('脚注内容')))
+    var newPara = view.state.schema.node('paragraph')
+    trDef.insert(defStart + 1, newPara)
+    trDef.setSelection(TextSelection.near(trDef.doc.resolve(defStart + 2)))
+    view.dispatch(trDef)
+    return true
+  }
+  // Check [^id] at end → create footnoteRef
+  var refMatch = textBefore.match(/\[\^([\w-]+)\]$/)
+  if (refMatch) {
+    event.preventDefault()
+    var trRef = view.state.tr
+    var matchStart = $from.pos - refMatch[0].length
+    trRef.replaceWith(matchStart, $from.pos, view.state.schema.nodes.footnoteRef!.create({ id: refMatch[1] }))
+    trRef.insert(matchStart + 1, view.state.schema.node('paragraph'))
+    view.dispatch(trRef)
+    return true
+  }
+  return false
+} } })] } })
+const LiveMarkdownExtension = Extension.create({ name: 'liveMarkdown', addInputRules() { return [
+  new InputRule({ find: /\*\*\*(.+?)\*\*\*(?=\s|$)/, handler: function({ chain, range, match }) { chain().deleteRange(range).insertContent({ type: 'text', text: match[1], marks: [{ type: 'bold' }, { type: 'italic' }] }).run() } }),
+  markInputRule({ find: /\*\*(.+?)\*\*(?=\s|$)/, type: this.editor.schema.marks.bold! }),
+  markInputRule({ find: /(?<!\*)\*(?!\*)(.+?)\*(?!\*)(?=\s|$)/, type: this.editor.schema.marks.italic! }),
+  markInputRule({ find: /~~(.+?)~~(?=\s|$)/, type: this.editor.schema.marks.strike! }),
+  markInputRule({ find: /`([^`]+)`(?=\s|$)/, type: this.editor.schema.marks.code! }),
+  markInputRule({ find: /\+\+(.+?)\+\+(?=\s|$)/, type: this.editor.schema.marks.underline! }),
+  markInputRule({ find: /==(.+?)==(?=\s|$)/, type: this.editor.schema.marks.highlight! }),
+  markInputRule({ find: /\[(.+?)\]\((.+?)\)(?=\s|$)/, type: this.editor.schema.marks.link!, getAttributes: function(m) { return { href: m[2] } } }),
+] } })
 
 function isHtmlFile(path?: string | null) { return !!path && /\.html?$/i.test(path) }
 function normalizeLineEndings(s: string) { return s.replace(/\r\n/g, '\n') }
@@ -346,7 +414,7 @@ export default function Editor() {
       Highlight.configure({ multicolor: true }), Typography, Underline,
       TextAlign.configure({ types: ['heading', 'paragraph', 'tableCell', 'tableHeader'] }),
       AtomBackspace, TableHelper, FootnoteNode, FootnoteRef,
-      LinkOpener, SlashDetector, SearchExtension, CharacterCount,
+      LinkOpener, SlashDetector, LiveMarkdownExtension, FootnoteInputHandler, SearchExtension, CharacterCount,
     ],
     editorProps: {
       attributes: { class: 'prose prose-sm max-w-none focus:outline-none px-8 py-6 min-h-full relative' },
@@ -425,6 +493,18 @@ export default function Editor() {
   }, [editor])
 
   useEffect(function() { function fn() { setPreviewImageBroken(false); setPreviewImage(_previewImageSrc.current) }; window.addEventListener(IMAGE_PREVIEW_EVENT, fn); return function() { window.removeEventListener(IMAGE_PREVIEW_EVENT, fn) } }, [])
+  // Intercept link clicks to prevent browser from also opening them alongside Tauri's openUrl
+  useEffect(function() {
+    if (!editor) return
+    function fn2(e: MouseEvent) {
+      var a2 = (e.target as HTMLElement).closest('a')
+      if (a2?.href && !a2.href.startsWith('#')) {
+        e.preventDefault()
+      }
+    }
+    editor.view.dom.addEventListener('click', fn2, true)
+    return function() { editor!.view.dom.removeEventListener('click', fn2, true) }
+  }, [editor])
   useEffect(function() {
     if (!previewImage) return
     function fn(e: KeyboardEvent) {

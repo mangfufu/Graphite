@@ -198,8 +198,9 @@ export default function Toolbar({ editor, onSearchToggle }: ToolbarProps) {
         { label: 'Fn', action: () => {
           let maxN = 0
           editor.state.doc.descendants((node) => {
-            if (node.type.name === 'footnote') {
-              const num = parseInt((node.attrs.n as string) || (node.attrs.id as string), 10)
+            var id2 = node.attrs.id as string | undefined
+            if (id2) {
+              var num = parseInt(id2, 10)
               if (!isNaN(num) && num > maxN) maxN = num
             }
           })
