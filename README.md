@@ -2,7 +2,7 @@
 
 WYSIWYG Markdown 编辑器，基于 Tauri 2 + React 18 + TypeScript + Rust。
 
-![Graphite](./src/assets/branding/graphite-horizontal-1024.png)
+![Graphite](./LOGO.png)
 
 ## 功能
 
