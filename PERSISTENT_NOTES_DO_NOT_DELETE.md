@@ -1002,4 +1002,75 @@
 -   行首空格和空行 roundtrip 未解决：`htmlToMd` 中使用 U+2060 保存前导空格，turndown 保留但 `marked.parse` 恢复时仍会吞掉；空白段落 `<p></p>` 在 markdown roundtrip 中无法保留（turndown 和 marked 都会折叠）
     
 
+## 2026-05-08 第八轮修复（语法模型统一）
+
+### 已调整
+
+-   `Editor.tsx` 的 Markdown roundtrip 重新收口，脚注、定义列表、Mermaid、数学公式、额外空段不再继续走“部分正则替换 + 部分节点剥离 + 部分默认 turndown”的混合路径。
+    
+-   脚注改回 Markdown 语义：
+    
+    -   引用走 `[^id]`
+        
+    -   定义走 `[^id]: ...`
+        
+    -   编辑器内部通过 `sup[data-footnote-ref]`、`.footnote-def[data-footnote-id]`、`[data-footnote-backref]` 处理跳转
+        
+-   Mermaid 节点 `parseHTML` 已和实际输出的 `pre.mermaid-container[data-mermaid-src]` 对齐，避免重开后 Mermaid block 无法重新识别。
+    
+-   定义列表不再只靠单条正则直接硬替为 HTML，当前会在预处理阶段收成带 `data-graphite-md` 的 `<dl>`，保存时优先按原始 Markdown 还原。
+    
+-   空行不再继续通过“全局压缩空格/trim”处理；`htmlToMd()` 末尾移除了会破坏空段和缩进的全局空格压缩。
+    
+-   `dirty check` 比较逻辑改成基于 `normalizeComparableMarkdown()`，不再把 `BLANK_MARKER` 整体抹掉后再比较。
+    
+### 当前代码结论
+
+-   这轮之后，脚注 / 定义列表 / Mermaid / 数学公式 / 额外空段至少已经回到“单一路径序列化”的状态。
+    
+-   这比之前“文档里写支持，但代码里多条路径互相打架”的状态要好得多。
+    
+-   构建验证通过：
+    
+    -   `npx tsc --noEmit`
+        
+    -   `npm run build`
+        
+    -   `cargo check --quiet`
+        
+-   但 Vite 大包 warning 仍在，当前不是包体优化轮次。
+    
+## 2026-05-08 第九轮调整（按当前产品要求收口）
+
+-   数学公式功能已移除：
+    
+    -   Toolbar 中不再提供行内公式 / 块级公式入口
+        
+    -   命令面板中不再提供公式命令
+        
+    -   Editor roundtrip 不再把 `$...$` / `$$...$$` 解释成特殊节点
+        
+-   Mermaid 功能已移除：
+    
+    -   Toolbar / 命令面板不再提供 Mermaid 插入入口
+        
+    -   Editor roundtrip 不再把 Mermaid fence 解释成特殊渲染块
+        
+    -   导出层 Mermaid 渲染钩子保留为 no-op，避免旧内容继续报错
+        
+-   脚注显示改为更朴素的 Markdown 形态：
+    
+    -   正文里保留角标引用
+        
+    -   底部保留 `[^{id}]: ...` 定义
+        
+    -   去掉脚注定义顶部横线和返回箭头
+        
+-   空行 roundtrip 继续调整：
+    
+    -   去掉基于自定义标签的空段保留方式
+        
+    -   改为基于 `BLANK_MARKER` 直通保存链路，避免额外空段再次翻倍
+    
+
 ◇BLANK◇

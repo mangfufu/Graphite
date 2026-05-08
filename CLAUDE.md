@@ -39,6 +39,12 @@ taskkill /f /im node.exe
     
 -   Image preview closes through an overlay path that avoids click-through reopening.
     
+-   Markdown roundtrip for footnotes, definition lists, and extra blank paragraphs has been reworked to use one serialization path instead of mixed regex + node stripping.
+    
+-   Footnotes now use `[^id]` / `[^id]: ...` semantics again.
+    
+-   Math formula and Mermaid authoring features have been removed from the editor UI and markdown roundtrip path.
+    
 -   `npm run build` passes, but Vite still reports large chunks for `index`, `mermaid`, and `tiptap`.
     
 
@@ -92,6 +98,8 @@ taskkill /f /im node.exe
 -   Save: TipTap `.getHTML()` -> `turndown` + GFM plugin -> Markdown -> IPC `write_file`.
     
 -   `.html` files are treated as direct HTML content instead of Markdown roundtrip.
+    
+-   Current custom preprocess / serialize coverage includes: definition lists, footnotes, and preserved extra blank paragraphs.
     
 
 ### Editor

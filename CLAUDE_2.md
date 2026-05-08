@@ -12,6 +12,12 @@ Secondary working notes for Graphite. This file mirrors the current code state m
     
 -   The app still supports normal `.html` documents; only the app entry file is protected.
     
+-   Footnotes, definition lists, and extra blank paragraphs now go through a single roundtrip path in `Editor.tsx` instead of mixed ad-hoc stripping.
+    
+-   Footnote refs / defs are back on Markdown-style `[^id]` and `[^id]: ...` semantics.
+    
+-   Math formula and Mermaid authoring features have been removed from the editor UI.
+    
 -   Build passes, but Vite still warns about large chunks.
     
 

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
-import { Extension, InputRule, Mark, Node, markInputRule } from '@tiptap/core'
+import { Extension, Node } from '@tiptap/core'
 import { Plugin, TextSelection } from '@tiptap/pm/state'
 import { EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
@@ -18,7 +18,6 @@ import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import { common, createLowlight } from 'lowlight'
 import { marked } from 'marked'
-import katex from 'katex'
 import TurndownService from 'turndown'
 import { gfm } from '@joplin/turndown-plugin-gfm'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -38,27 +37,51 @@ turndownService.use(gfm)
 turndownService.addRule('horizontalRule', { filter: 'hr', replacement: () => '\n\n---\n\n' })
 let previewSuppressUntil = 0
 
-const BLANK_MARKER = '◇BLANK◇'
 const _previewImageSrc = { current: null as string | null }
 const IMAGE_PREVIEW_EVENT = 'graphite:image-preview'
 
-function scrollToFootnoteDef(view: any, id: string) {
-  const doc = view.state.doc; const text = doc.textContent; const idx = text.indexOf(`[${id}]:`)
-  if (idx < 0) return; let pos = -1, acc = 0
-  doc.descendants((n: any, p: number) => {
-    if (pos >= 0) return false; if (!n.isText) return true; const len = n.textContent.length
-    if (idx >= acc && idx < acc + len) { pos = p + (idx - acc); return false }; acc += len
+function scrollElementIntoView(container: HTMLElement | null, target: HTMLElement | null) {
+  if (!container || !target) return
+  const box = container.getBoundingClientRect()
+  const targetBox = target.getBoundingClientRect()
+  container.scrollTo({
+    top: targetBox.top - box.top + container.scrollTop - 80,
+    behavior: 'smooth',
   })
-  if (pos < 0) return
-  const tr = view.state.tr; tr.setSelection(TextSelection.create(doc, pos, pos + `[${id}]:`.length)); view.dispatch(tr); view.focus()
-  setTimeout(() => {
-    const scroller = view.dom.closest('.overflow-y-auto') as HTMLElement | null
-    if (scroller) { const box = scroller.getBoundingClientRect(); const c = view.coordsAtPos(pos); if (c) scroller.scrollTo({ top: c.top - box.top + scroller.scrollTop - 80, behavior: 'smooth' }) }
-  }, 50)
 }
+
+function scrollToFootnoteDef(view: any, id: string) {
+  const scroller = view.dom.closest('.overflow-y-auto') as HTMLElement | null
+  const target = view.dom.querySelector(`[data-footnote-id="${CSS.escape(id)}"]`) as HTMLElement | null
+  scrollElementIntoView(scroller, target)
+}
+
+function scrollToFootnoteRef(view: any, id: string) {
+  const scroller = view.dom.closest('.overflow-y-auto') as HTMLElement | null
+  const target = view.dom.querySelector(`sup[data-footnote-ref="${CSS.escape(id)}"]`) as HTMLElement | null
+  scrollElementIntoView(scroller, target)
+}
+
 function encodeHtmlEntities(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
 
-const FootnoteRef = Mark.create({ name: 'footnoteRef', parseHTML: () => [{ tag: 'span[data-footnote-ref]' }], renderHTML: () => ['span', { 'data-footnote-ref': '' }] })
+const FootnoteRef = Node.create({
+  name: 'footnoteRef',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: false,
+  addAttributes() {
+    return { id: { default: '' } }
+  },
+  parseHTML: () => [{
+    tag: 'sup[data-footnote-ref]',
+    getAttrs: (node) => ({ id: (node as HTMLElement).getAttribute('data-footnote-ref') || '' }),
+  }],
+  renderHTML({ node }) {
+    const id = node.attrs.id || ''
+    return ['sup', { 'data-footnote-ref': id, contenteditable: 'false' }, `[${id}]`]
+  },
+})
 const LinkOpener = Extension.create({ name: 'linkOpener', addProseMirrorPlugins() { return [new Plugin({ props: { handleClick: (view, _pos, event) => {
     if (Date.now() < previewSuppressUntil) { event.preventDefault(); return true }
     const t = event.target as HTMLElement
@@ -66,60 +89,194 @@ const LinkOpener = Extension.create({ name: 'linkOpener', addProseMirrorPlugins(
     if (a?.href?.startsWith('http')) { event.preventDefault(); import('@tauri-apps/plugin-opener').then((m) => m.openUrl(a!.href)); return true }
     const i = t.closest('img')
     if (i?.src) { event.preventDefault(); _previewImageSrc.current = i.src; window.dispatchEvent(new CustomEvent(IMAGE_PREVIEW_EVENT)); return true }
-    const s = t.closest('sup')
-    if (s?.hasAttribute?.('data-footnote')) { event.preventDefault(); const id = s.getAttribute('data-footnote'); if (id) scrollToFootnoteDef(view, id); return true }
+    const s = t.closest('sup[data-footnote-ref]')
+    if (s?.hasAttribute?.('data-footnote-ref')) { event.preventDefault(); const id = s.getAttribute('data-footnote-ref'); if (id) scrollToFootnoteDef(view, id); return true }
+    const l = t.closest('.footnote-label[data-footnote-backref]')
+    if (l?.hasAttribute?.('data-footnote-backref')) { event.preventDefault(); const id = l.getAttribute('data-footnote-backref'); if (id) scrollToFootnoteRef(view, id); return true }
     return false
 } } }) ] } })
 const AtomBackspace = Extension.create({ name: 'atomBackspace', addKeyboardShortcuts() { return { Backspace: ({ editor }) => { const { selection, doc } = editor.state; if (!(selection instanceof TextSelection)) return false; const { $from } = selection; if ($from.parentOffset === 0 && $from.pos > 0) { const b = doc.resolve($from.pos - 1); if (b.nodeBefore?.type.isAtom) { editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(doc.resolve(b.pos - b.nodeBefore.nodeSize)))); return true } } return false } } } })
 const TableHelper = Extension.create({ name: 'tableHelper', addKeyboardShortcuts() { return { Backspace: ({ editor }) => { const { selection } = editor.state; if (!(selection instanceof TextSelection)) return false; const { $from } = selection; let td = -1; for (let d = $from.depth; d > 0; d--) { if ($from.node(d).type.name === 'table') { td = d; break } }; if (td === -1) return false; const cd = td + 2; if ($from.depth >= cd && $from.parentOffset === 0 && $from.node(cd).textContent.trim() === '') { const rd = td + 1; const fc = $from.index(cd) === 0; const fr = $from.index(rd) === 0; if (fc && !fr) { let ae = true; $from.node(rd).forEach((c: any) => { if (c.textContent.trim() !== '') ae = false }); if (ae) { editor.chain().focus().deleteRow().run(); editor.chain().focus().goToPreviousCell().run(); return true } }; editor.chain().focus().goToPreviousCell().run(); return true }; return false }, arrowDown: ({ editor }) => { const { selection } = editor.state; if (!(selection instanceof TextSelection)) return false; const { $from } = selection; let td = -1; for (let d = $from.depth; d > 0; d--) { if ($from.node(d).type.name === 'table') td = d }; if (td === -1) return false; const cd = td + 2; const rd = td + 1; const rn = $from.node(rd); const cn = $from.node(cd); if (!rn || !cn) return false; if ($from.index(rd) === rn.childCount - 1 && $from.index(cd) === cn.childCount - 1 && $from.pos >= $from.end(cd) - 1) { editor.chain().focus().insertContentAt($from.after(td) + 1, '<p></p>').focus().run(); return true }; return false } } } })
-const MathInline = Mark.create({ name: 'mathInline', parseHTML: () => [{ tag: 'span[data-math-inline]' }], renderHTML({ mark }) { return ['span', { 'data-math-inline': mark.attrs.latex || '' }] }, addAttributes() { return { latex: { default: '' } } }, addInputRules() { return [markInputRule({ find: /\$(.+?)\$/, type: this.type, getAttributes: (m) => ({ latex: m[1] }) })] } })
-const MathBlock = Node.create({ name: 'mathBlock', group: 'block', atom: true, draggable: true, addAttributes() { return { latex: { default: '' } } }, parseHTML() { return [{ tag: 'div[data-math-block]', getAttrs: (n) => ({ latex: (n as HTMLElement).getAttribute('data-math-block') || '' }) }] }, renderHTML({ node }) { const l = node.attrs.latex || ''; const r = katex.renderToString(l, { displayMode: true, throwOnError: false }); const e = document.createElement('div'); e.setAttribute('data-math-block', l); e.className = 'math-block'; e.innerHTML = r; return { dom: e } }, addInputRules() { return [new InputRule({ find: /^\$\$([\s\S]*?)\$\$$/, handler: ({ state, range, match }) => { state.tr.replaceWith(range.from, range.to, this.type.create({ latex: match[1]?.trim() || '' })) } })] } })
-const MermaidBlock = Node.create({ name: 'mermaidBlock', group: 'block', atom: true, draggable: true, addAttributes() { return { src: { default: '' } } }, parseHTML() { return [{ tag: 'pre[data-mermaid]' }] }, renderHTML({ node }) { const src = node.attrs.src || ''; return ['pre', { class: 'mermaid-container', 'data-mermaid-src': encodeURIComponent(src) }, ['code', {}, src || 'graph TD\n  A --> B']] }, addInputRules() { return [new InputRule({ find: /^```mermaid\n?$/, handler: ({ state, range }) => { state.tr.replaceWith(range.from, range.to, this.type.create({ src: 'graph TD\n  A --> B' })) } })] }, addNodeView() { return (iv: any) => { const dom = document.createElement('div'); dom.className = 'mermaid-wrapper'; dom.innerHTML = '渲染中...'; const render = async (src: string) => { try { const mod = await import('mermaid'); const m = mod.default || mod; m.initialize({ startOnLoad: false, theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default' }); const r = await m.render('m-' + Date.now(), src); dom.innerHTML = typeof r === 'string' ? r : r.svg } catch { dom.innerHTML = '渲染失败' } }; render(iv.node.attrs.src || ''); return { dom, update: (n: any) => { if (n.attrs.src !== iv.node.attrs.src) { dom.innerHTML = '...'; render(n.attrs.src) }; return true } } } } })
-const FootnoteNode = Node.create({ name: 'footnote', group: 'block', atom: true, addAttributes() { return { id: { default: '' }, content: { default: '脚注内容' } } }, parseHTML() { return [{ tag: 'div.footnote-def', getAttrs: (n) => ({ id: (n as HTMLElement).getAttribute('data-footnote-id') || '', content: (n as HTMLElement).textContent?.replace(/^\[\^?\w+\]:\s*/, '').trim() || '' }) }] }, renderHTML({ node }) { return ['div', { class: 'footnote-def', 'data-footnote-id': node.attrs.id }, `[${node.attrs.id}]: ${node.attrs.content}`] } })
+const FootnoteNode = Node.create({
+  name: 'footnote',
+  group: 'block',
+  content: 'inline*',
+  defining: true,
+  selectable: false,
+  addAttributes() {
+    return { id: { default: '' } }
+  },
+  parseHTML() {
+    return [{
+      tag: 'div.footnote-def[data-footnote-id]',
+      contentElement: '.footnote-content',
+      getAttrs: (node) => ({
+        id: (node as HTMLElement).getAttribute('data-footnote-id') || '',
+      }),
+    }]
+  },
+  renderHTML({ node }) {
+    const id = node.attrs.id || ''
+    return [
+      'div',
+      {
+        class: 'footnote-def',
+        'data-footnote-id': id,
+      },
+      ['span', { class: 'footnote-label', 'data-footnote-backref': id }, `[${id}]`],
+      ' ',
+      ['span', { class: 'footnote-content' }, 0],
+    ]
+  },
+})
 const SlashDetector = Extension.create({ name: 'slashDetector', addProseMirrorPlugins() { return [new Plugin({ props: { handleKeyDown: (view, event) => { if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { const { $from } = view.state.selection; if ($from.parentOffset === 1) window.dispatchEvent(new CustomEvent('graphite:slash-opened', { detail: { view, pos: $from.pos } })) }; return false } } })] } })
 
 function isHtmlFile(path?: string | null) { return !!path && /\.html?$/i.test(path) }
 function normalizeLineEndings(s: string) { return s.replace(/\r\n/g, '\n') }
 function normalizeHtmlString(html: string) { var div = document.createElement('div'); div.innerHTML = html; return div.innerHTML }
+function normalizeComparableMarkdown(md: string) { return normalizeLineEndings(md).replace(/\n+$/g, '') }
+
+function protectMarkdownSegments(md: string) {
+  const store: string[] = []
+  const protect = function(pattern: RegExp) {
+    md = md.replace(pattern, function(match) {
+      store.push(match)
+      return `@@GRAPHITE_SEGMENT_${store.length - 1}@@`
+    })
+  }
+  protect(/```(?!mermaid\b)[\s\S]*?```/g)
+  protect(/`[^`\n]+`/g)
+  return {
+    text: md,
+    restore(text: string) {
+      return text.replace(/@@GRAPHITE_SEGMENT_(\d+)@@/g, function(_, index) {
+        return store[parseInt(index, 10)] || ''
+      })
+    },
+  }
+}
+
+function preprocessFootnotes(md: string) {
+  const lines = normalizeLineEndings(md).split('\n')
+  const out: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^\[\^([\w-]+)\]:\s*(.*)$/)
+    if (!match) {
+      out.push(lines[i])
+      continue
+    }
+    const id = match[1]
+    const chunks = [match[2] || '']
+    let j = i + 1
+    while (j < lines.length) {
+      const line = lines[j]
+      if (/^( {2,}|\t)/.test(line)) {
+        chunks.push(line.replace(/^( {2,}|\t)/, ''))
+        j++
+        continue
+      }
+      if (line === '' && j + 1 < lines.length && /^( {2,}|\t)/.test(lines[j + 1])) {
+        chunks.push('')
+        j++
+        continue
+      }
+      break
+    }
+    const content = chunks.join('\n').trimEnd()
+    out.push(`<div class="footnote-def" data-footnote-id="${encodeHtmlEntities(id)}"><span class="footnote-label" data-footnote-backref="${encodeHtmlEntities(id)}">[${encodeHtmlEntities(id)}]</span> <span class="footnote-content">${marked.parseInline(content || '', { breaks: true, gfm: true, async: false })}</span></div>`)
+    i = j - 1
+  }
+  return out.map(function(line) {
+    if (line.startsWith('<div class="footnote-def"')) return line
+    return line.replace(/\[\^([\w-]+)\]/g, '<sup data-footnote-ref="$1" contenteditable="false">[$1]</sup>')
+  }).join('\n')
+}
+
+function preprocessDefinitionLists(md: string) {
+  const lines = md.split('\n')
+  const out: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const term = lines[i]
+    const next = lines[i + 1]
+    if (!term || !next || !/^:\s+/.test(next)) {
+      out.push(lines[i])
+      continue
+    }
+
+    const entries: Array<{ term: string; definitions: string[] }> = []
+    let cursor = i
+    while (cursor < lines.length) {
+      const currentTerm = lines[cursor]
+      const currentDef = lines[cursor + 1]
+      if (!currentTerm || !currentDef || !/^:\s+/.test(currentDef)) break
+      const definitions = [currentDef.replace(/^:\s+/, '')]
+      cursor += 2
+      while (cursor < lines.length && /^( {2,}|\t)/.test(lines[cursor])) {
+        definitions.push(lines[cursor].replace(/^( {2,}|\t)/, ''))
+        cursor++
+      }
+      entries.push({ term: currentTerm, definitions })
+      if (lines[cursor] !== '' || !lines[cursor + 1] || !/^:\s+/.test(lines[cursor + 1])) break
+      while (cursor < lines.length && lines[cursor] === '') cursor++
+    }
+
+    if (!entries.length) {
+      out.push(lines[i])
+      continue
+    }
+
+    const markdownSource = entries.map(function(entry) {
+      return `${entry.term}\n: ${entry.definitions[0]}${entry.definitions.slice(1).map(function(line) { return `\n  ${line}` }).join('')}`
+    }).join('\n\n')
+    const html = entries.map(function(entry) {
+      const body = marked.parseInline(entry.definitions.join('<br />') || '', { breaks: true, gfm: true, async: false })
+      return `<dt>${encodeHtmlEntities(entry.term)}</dt><dd>${body}</dd>`
+    }).join('')
+    out.push(`<dl data-graphite-md="${encodeHtmlEntities(markdownSource)}">${html}</dl>`)
+    i = cursor - 1
+  }
+  return out.join('\n')
+}
+
+function finalizeMarkdown(md: string) {
+  return normalizeLineEndings(md)
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\n+$/g, '')
+}
 
 function preprocessMarkdownForEditor(md: string): string {
-  return normalizeLineEndings(md)
+  const protectedSegments = protectMarkdownSegments(normalizeLineEndings(md))
+  let text = protectedSegments.text
+  text = preprocessFootnotes(text)
+  text = preprocessDefinitionLists(text)
+  return protectedSegments.restore(text)
 }
 
 function mdToHtml(md: string): string {
-  let h = preprocessMarkdownForEditor(md); const bm: string[] = []; const im: string[] = []
-  h = h.replace(/^\$\$([\s\S]*?)\$\$/gm, () => { bm.push(RegExp.$1); return '<!--KTHB' + (bm.length - 1) + '-->' })
-  h = h.replace(/(?<![0-9])\$([^$\n]+?)\$(?![0-9])/g, () => { im.push(RegExp.$1); return '<!--KTHI' + (im.length - 1) + '-->' })
+  let h = preprocessMarkdownForEditor(md)
   h = h.replace(/==(.+?)==/g, '<mark>$1</mark>')
-  h = h.replace(/^\[\^([\w-]+)\]:\s*(.*)$/gm, '<sup data-footnote="$1">[$1]: $2</sup>')
-  h = h.replace(/^(?:(\S.{0,60}?)\n:\s*(.*?)(?=\n\n|\n[^\s]|$))/gm, '<dl><dt>$1</dt><dd>$2</dd></dl>')
   h = marked.parse(h, { breaks: true, gfm: true, async: false }) as string
-  h = h.split('<p>' + BLANK_MARKER + '</p>').join('<p class="graphite-blank"><br></p>')
-  h = h.split(BLANK_MARKER).join('')
-  h = h.replace(/```mermaid\n?([\s\S]*?)```/g, function(_, c) { return '<pre class="mermaid-container" data-mermaid-src="' + encodeURIComponent(c.trim()) + '"><code>' + c.trim() + '</code></pre>' })
-  h = h.replace(/<!--KTHB(\d+)-->/g, function(_, i) { var f = bm[parseInt(i)]; return '<div data-math-block="' + encodeHtmlEntities(f) + '" class="math-block">' + katex.renderToString(f, { displayMode: true, throwOnError: false }) + '</div>' })
-  h = h.replace(/<!--KTHI(\d+)-->/g, function(_, i) { var f = im[parseInt(i)]; return '<span data-math-inline="' + encodeHtmlEntities(f) + '">' + katex.renderToString(f, { throwOnError: false }) + '</span>' })
   return h
 }
 
 function htmlToMd(html: string): string {
   var div = document.createElement('div'); div.innerHTML = html
-  div.querySelectorAll('p').forEach(function(p) { if (p.querySelector('[data-footnote-ref]')) p.remove() })
-  div.querySelectorAll('.footnote-def').forEach(function(el) { el.remove() })
-  // Preserve empty paragraphs as BLANK_MARKER (turndown strips them)
-  div.querySelectorAll('p').forEach(function(p) {
-    var inner = p.innerHTML.replace(/\s/g, '')
-    if (!inner || inner === '<br>' || inner === '<br/>') { p.innerHTML = BLANK_MARKER }
-  })
-  return turndownService.turndown(div.innerHTML).split(BLANK_MARKER).join(' ' + BLANK_MARKER + ' ')
-    .replace(/ {2,}/g, ' ').trim()
+  return finalizeMarkdown(turndownService.turndown(div.innerHTML))
 }
 
-turndownService.addRule('mathInline', { filter: function(n) { return (n as HTMLElement).hasAttribute?.('data-math-inline') ?? false }, replacement: function(_c: string, n: any) { return '$' + (n.getAttribute('data-math-inline') || n.textContent || '') + '$' } })
-turndownService.addRule('mathBlock', { filter: function(n) { return (n as HTMLElement).hasAttribute?.('data-math-block') ?? false }, replacement: function(_c: string, n: any) { return '\n\n$$' + (n.getAttribute('data-math-block') || '') + '$$' } })
 turndownService.addRule('underline', { filter: 'u', replacement: function(_c: string) { return '<u>' + _c + '</u>' } })
 turndownService.addRule('highlight', { filter: 'mark', replacement: function(_c: string, n: any) { return '==' + (n.innerHTML || '') + '==' } })
-turndownService.addRule('footnote', { filter: function(n) { return (n as HTMLElement).classList?.contains('footnote-def') ?? false }, replacement: function(_c: string, n: any) { return '\n\n[^' + (n.getAttribute('data-footnote-id') || '') + ']: ' + (n.textContent || '') } })
+turndownService.addRule('footnoteRef', { filter: function(n) { return (n as HTMLElement).hasAttribute?.('data-footnote-ref') ?? false }, replacement: function(_c: string, n: any) { return `[^${n.getAttribute('data-footnote-ref') || ''}]` } })
+turndownService.addRule('footnote', { filter: function(n) { return (n as HTMLElement).classList?.contains('footnote-def') ?? false }, replacement: function(_c: string, n: any) {
+  const id = n.getAttribute('data-footnote-id') || ''
+  const contentEl = n.querySelector('.footnote-content') as HTMLElement | null
+  const rawContent = contentEl ? turndownService.turndown(contentEl.innerHTML).trim() : ''
+  const content = normalizeLineEndings(rawContent).split('\n')
+  if (!content.length) return `\n\n[^${id}]:`
+  const [first, ...rest] = content
+  return `\n\n[^${id}]: ${first}${rest.map(function(line: string) { return `\n  ${line}` }).join('')}`
+} })
+turndownService.addRule('definitionList', { filter: function(n) { return n.nodeName === 'DL' && (n as HTMLElement).hasAttribute('data-graphite-md') }, replacement: function(_c: string, n: any) { return `\n\n${n.getAttribute('data-graphite-md') || ''}\n\n` } })
 
 export default function Editor() {
   const { currentFilePath, currentContent } = useFileStore()
@@ -188,7 +345,7 @@ export default function Editor() {
       Placeholder.configure({ placeholder: '开始输入...' }),
       Highlight.configure({ multicolor: true }), Typography, Underline,
       TextAlign.configure({ types: ['heading', 'paragraph', 'tableCell', 'tableHeader'] }),
-      AtomBackspace, TableHelper, MathInline, MathBlock, MermaidBlock, FootnoteNode, FootnoteRef,
+      AtomBackspace, TableHelper, FootnoteNode, FootnoteRef,
       LinkOpener, SlashDetector, SearchExtension, CharacterCount,
     ],
     editorProps: {
@@ -228,7 +385,7 @@ export default function Editor() {
       if (!ed) return
       var currentMd = serializeEditorContent(ed.getHTML())
       var store = useFileStore.getState()
-      if (normalizeLineEndings(currentMd).replace(/◇BLANK◇/g, '').trim() === normalizeLineEndings(serializeStoredContent(store.originalContent)).replace(/◇BLANK◇/g, '').trim()) return
+      if (normalizeComparableMarkdown(currentMd) === normalizeComparableMarkdown(serializeStoredContent(store.originalContent))) return
       store.setSaveStatus('unsaved')
       useFileStore.setState({ isDirty: true })
       setStats({ chars: ed.storage.characterCount.characters(), words: ed.storage.characterCount.words() })

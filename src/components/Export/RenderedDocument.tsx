@@ -105,41 +105,8 @@ export async function waitForImages(container: HTMLElement): Promise<void> {
   }))
 }
 
-export async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
-  const blocks = Array.from(container.querySelectorAll<HTMLElement>('pre.mermaid-container[data-mermaid-src]'))
-  if (blocks.length === 0) return
-
-  const mod = await import('mermaid')
-  const mermaid = (mod.default || mod) as any
-  const isDark = document.documentElement.classList.contains('dark') || !!document.querySelector('.dark')
-
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: isDark ? 'dark' : 'default',
-  })
-
-  for (const [index, block] of blocks.entries()) {
-    const encodedSrc = block.getAttribute('data-mermaid-src') || ''
-    const rawSrc = decodeURIComponent(encodedSrc)
-
-    if (!rawSrc) {
-      block.outerHTML = '<div class="mermaid-error">Empty mermaid block</div>'
-      continue
-    }
-
-    try {
-      const id = `export-mermaid-${Date.now()}-${index}`
-      const result = await mermaid.render(id, rawSrc)
-      const svg = typeof result === 'string' ? result : (result as { svg: string }).svg
-      const wrapper = document.createElement('div')
-      wrapper.className = 'mermaid-wrapper'
-      wrapper.innerHTML = svg
-      block.replaceWith(wrapper)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Render failed'
-      block.outerHTML = `<div class="mermaid-error">Render failed: ${message}</div>`
-    }
-  }
+export async function renderMermaidBlocks(_container: HTMLElement): Promise<void> {
+  return
 }
 
 /* ── main render function ─────────────────────────────────── */
@@ -205,21 +172,14 @@ export async function renderDocument(html: string): Promise<HTMLElement> {
     }
   }
 
-  // 4. Render Mermaid blocks
-  try {
-    await renderMermaidBlocks(container)
-  } catch {
-    // Mermaid rendering failed; continue with original HTML
-  }
-
-  // 5. Inline local images
+  // 4. Inline local images
   try {
     await inlineLocalImages(container)
   } catch {
     // Image inlining failed; continue with original src
   }
 
-  // 6. Wait for images to load
+  // 5. Wait for images to load
   try {
     await waitForImages(container)
   } catch {

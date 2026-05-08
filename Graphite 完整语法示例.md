@@ -42,38 +42,38 @@
 
 ### 无序列表
 
-- 项目 A
- 
-- 项目 B
- 
- - 子项目 B1
- 
- - 子项目 B2
- 
-- 项目 C
- 
+-   项目 A
+    
+-   项目 B
+    
+-   子项目 B1
+    
+-   子项目 B2
+    
+-   项目 C
+    
 
 ### 有序列表
 
-1. 第一步
- 
-2. 第二步
- 
-3. 第三步
- 
+1.  第一步
+    
+2.  第二步
+    
+3.  第三步
+    
 
 ### 任务列表
 
-- 已完成任务
- 
-- 未完成任务
- 
-- 另一个待办
- 
- - 嵌套已完成
- 
- - 嵌套待办
- 
+-   已完成任务
+    
+-   未完成任务
+    
+-   另一个待办
+    
+-   嵌套已完成
+    
+-   嵌套待办
+    
 
 ---
 
@@ -128,7 +128,7 @@ fn main() {
 
 ## 7\. 表格
 
-| | | |
+|     |     |     |
 | :--- | :---: | ---: |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
@@ -143,12 +143,14 @@ fn main() {
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
+| ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
+| ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | 左对齐 | 居中对齐 | 右对齐 |
-| 苹果 | 香蕉 | 樱桃 |
-| 日期 | 葡萄 | 荔枝 |
-| 芒果 | 橙子 | 桃子 |
+| 苹果  | 香蕉  | 樱桃  |
+| 日期  | 葡萄  | 荔枝  |
+| 芒果  | 橙子  | 桃子  |
 
-| | | |
+|     |     |     |
 | --- | --- | --- |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
@@ -163,9 +165,11 @@ fn main() {
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
 | ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
-| 名称 | 类型 | 说明 |
-| `id` | `int` | 主键 |
-| `name` | `text` | 名称 |
+| ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
+| ◇BLANK◇ | ◇BLANK◇ | ◇BLANK◇ |
+| 名称  | 类型  | 说明  |
+| `id` | `int` | 主键  |
+| `name` | `text` | 名称  |
 | `created_at` | `timestamp` | 创建时间 |
 
 ---
@@ -174,9 +178,9 @@ fn main() {
 
 ### 行内公式
 
-爱因斯坦的 $$ 是著名的质能方程。
+爱因斯坦的 $E=mc2$ 是著名的质能方程。
 
-勾股定理：$$
+勾股定理：$a2=b2+c2$
 
 ### 块级公式
 
@@ -293,5 +297,3 @@ Markdown</dt><dd>一种轻量级标记语言</dd></dl>
 
 *Graphite — WYSIWYG Markdown Editor*
 ```
-
- ◇BLANK◇

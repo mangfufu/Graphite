@@ -112,31 +112,6 @@ export default function CommandPalette() {
         }
         break
       }
-      case 'insertMath': {
-        const editor = getEditor()
-        if (editor) {
-          const { empty, from, to } = editor.state.selection
-          if (empty) {
-            editor.chain().focus().insertContentAt(from, '$$').run()
-            editor.chain().focus().setTextSelection(from + 1).run()
-          } else {
-            const text = editor.state.doc.textBetween(from, to)
-            editor.chain().focus().deleteSelection().insertContentAt(from, `$${text}$`).run()
-            editor.chain().focus().setTextSelection(from + text.length + 2).run()
-          }
-        }
-        break
-      }
-      case 'insertMermaid': {
-        const editor = getEditor()
-        if (editor) {
-          editor.chain().focus().insertContent({
-            type: 'mermaidBlock',
-            attrs: { src: 'graph TD\n  A[Start] --> B[End]' },
-          }).run()
-        }
-        break
-      }
       case 'toggleSearch': {
         if (getEditor()) {
           requestAnimationFrame(() => {
@@ -156,8 +131,6 @@ export default function CommandPalette() {
     { id: 'toggleTheme', label: '切换主题模式', action: () => executeCommand('toggleTheme') },
     { id: 'openSettings', label: '打开设置', action: () => executeCommand('openSettings') },
     { id: 'insertTable', label: '插入表格', action: () => executeCommand('insertTable') },
-    { id: 'insertMath', label: '行内公式', action: () => executeCommand('insertMath') },
-    { id: 'insertMermaid', label: '插入 Mermaid', action: () => executeCommand('insertMermaid') },
     { id: 'toggleSearch', label: '文档搜索', action: () => executeCommand('toggleSearch') },
   ]
 

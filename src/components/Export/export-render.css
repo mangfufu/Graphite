@@ -447,7 +447,7 @@
 }
 
 .export-render .footnote-def,
-.export-render p:has(span[data-footnote-ref]) {
+.export-render p:has(sup[data-footnote-ref]) {
   font-size: 0.875em;
   color: var(--text-secondary, #666);
   border-top: 1px solid var(--border, #e5e5e5) !important;

@@ -42,21 +42,6 @@ export default function Toolbar({ editor, onSearchToggle }: ToolbarProps) {
     if (url) editor.chain().focus().setImage({ src: url }).run()
   }
 
-  const handleMath = () => {
-    const { empty, from, to } = editor.state.selection
-
-    if (empty) {
-      // Insert "$$" and place cursor between them so the user can type the formula
-      editor.chain().focus().insertContentAt(from, '$$').run()
-      editor.chain().focus().setTextSelection(from + 1).run()
-    } else {
-      // Wrap selected text in $...$
-      const text = editor.state.doc.textBetween(from, to)
-      editor.chain().focus().deleteSelection().insertContentAt(from, `$${text}$`).run()
-      editor.chain().focus().setTextSelection(from + text.length + 2).run()
-    }
-  }
-
   // Custom handler for deleting a row: ensures cursor stays in the document
   // when the last row is deleted (table is removed).
   const handleDeleteRow = () => {
@@ -187,13 +172,6 @@ export default function Toolbar({ editor, onSearchToggle }: ToolbarProps) {
         { label: 'U', action: () => editor.chain().focus().toggleUnderline().run(), active: editor.isActive('underline'), title: '下划线' },
         { label: 'S', action: () => editor.chain().focus().toggleStrike().run(), active: editor.isActive('strike'), title: '删除线' },
         { label: 'H', action: () => editor.chain().focus().toggleHighlight().run(), active: editor.isActive('highlight'), title: '高亮' },
-        { label: 'Σ', action: handleMath, active: false, title: '行内公式 ($...$)' },
-        { label: '∑b', action: () => {
-          editor.chain().focus().insertContent({
-            type: 'mathBlock',
-            attrs: { latex: '公式' },
-          }).run()
-        }, active: false, title: '块级公式' },
       ],
     },
     {
@@ -227,14 +205,15 @@ export default function Toolbar({ editor, onSearchToggle }: ToolbarProps) {
           })
           const nextN = maxN + 1
           const id = String(nextN)
-          const cursorPos = editor.state.selection.$from.pos
-          const fnNode = editor.schema.nodes.footnote.create({ id, content: '脚注内容' })
-          editor.chain().focus().insertContentAt(cursorPos, fnNode).run()
-          const end = editor.state.doc.content.size
-          editor.chain().focus().insertContentAt(end, [
-            { type: 'text', text: '\n\n' },
-            { type: 'text', text: `[${id}]`, marks: [{ type: 'footnoteRef' }] },
-            { type: 'text', text: ': ' },
+          const insertPos = editor.state.selection.to
+          editor.chain().focus().insertContentAt(insertPos, [
+            { type: 'footnoteRef', attrs: { id } },
+          ]).run()
+          editor.chain().focus().setTextSelection(insertPos + 1).run()
+          const endPos = editor.state.doc.content.size
+          editor.chain().focus().insertContentAt(endPos, [
+            { type: 'paragraph' },
+            { type: 'footnote', attrs: { id }, content: [{ type: 'text', text: '脚注内容' }] },
           ]).run()
         }, active: false, title: '脚注' },
       ],
