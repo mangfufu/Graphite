@@ -71,77 +71,17 @@ async function nextFrame(count = 2): Promise<void> {
   }
 }
 
-async function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = src
-  })
-}
-
-async function captureEditorScreenshot(editorElement: HTMLElement): Promise<Uint8Array> {
-  const scroller = editorElement.closest('.overflow-y-auto') as HTMLElement | null
-  const wrapper = editorElement.parentElement as HTMLElement | null
-  if (!scroller || !wrapper) throw new Error('Editor scroller not found')
-
+async function captureEditorHtml(editorElement: HTMLElement): Promise<Uint8Array> {
   const { invoke } = await import('@tauri-apps/api/core')
-  const scale = window.devicePixelRatio || 1
-  const scrollerRect = scroller.getBoundingClientRect()
-  const wrapperRect = wrapper.getBoundingClientRect()
-  const captureWidthCss = Math.ceil(wrapperRect.width)
-  const totalHeightCss = Math.ceil(Math.max(editorElement.scrollHeight, wrapper.scrollHeight))
-  const viewportHeightCss = Math.max(1, Math.floor(scrollerRect.height))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(captureWidthCss * scale))
-  canvas.height = Math.max(1, Math.round(totalHeightCss * scale))
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Failed to create stitching canvas')
-
-  const originalScrollTop = scroller.scrollTop
-  scroller.style.pointerEvents = "none"
-  const offsets: number[] = []
-  for (let offset = 0; offset < totalHeightCss; offset += viewportHeightCss) {
-    offsets.push(offset)
-  }
-
+  const container = await renderDocument(cleanExportHtml(editorElement.innerHTML))
   try {
-    var destY = 0
-    for (const offset of offsets) {
-      scroller.scrollTop = offset
-      await nextFrame(3)
-
-      const liveWrapperRect = wrapper.getBoundingClientRect()
-      const visibleTop = Math.max(liveWrapperRect.top, scrollerRect.top)
-      const sliceHeightCss = Math.max(0, Math.min(viewportHeightCss, totalHeightCss - offset))
-      if (sliceHeightCss <= 0) continue
-
-      const bytes = await invoke<number[]>('capture_region_png', {
-        x: liveWrapperRect.left,
-        y: visibleTop,
-        width: liveWrapperRect.width,
-        height: sliceHeightCss,
-        scale,
-      })
-
-      const pngBytes = new Uint8Array(bytes)
-      const dataUrl = bytesToDataUrl(pngBytes)
-      const image = await loadImage(dataUrl)
-      
-      
-      var destHeight = Math.round(sliceHeightCss * scale)
-      ctx.drawImage(image, 0, 0, image.width, image.height, 0, destY, canvas.width, destHeight)
-      destY += destHeight
-    }
+    const themeStyle = getSerializedThemeStyle(container)
+    const html = wrapHtml(container.innerHTML, themeStyle, false)
+    const bytes = await invoke<number[]>('capture_html_png', { html })
+    return new Uint8Array(bytes)
   } finally {
-    scroller.scrollTop = originalScrollTop
-    await nextFrame(2)
-    scroller.style.pointerEvents = ""
+    document.body.removeChild(container)
   }
-
-  const dataUrl = canvas.toDataURL('image/png')
-  const b64 = dataUrl.split(',')[1] || ''
-  return new Uint8Array(atob(b64).split('').map((c) => c.charCodeAt(0)))
 }
 
 export default function ExportModal() {
@@ -205,7 +145,7 @@ export default function ExportModal() {
           } finally { document.body.removeChild(container) }
         } catch (e) {
           console.warn('Native PDF failed, falling back:', e)
-          const pngBytes = await withModalHidden(() => captureEditorScreenshot(editorRef.element))
+          const pngBytes = await withModalHidden(() => captureEditorHtml(editorRef.element))
           const imgData = bytesToDataUrl(pngBytes)
           const pdf = new jsPDF('p', 'mm', 'a4')
           const pw = pdf.internal.pageSize.getWidth()
@@ -221,28 +161,36 @@ export default function ExportModal() {
           await writeFile(path, new Uint8Array(pdf.output("arraybuffer")))
         }
       } else if (format === 'png') {
-        const pngBytes = previewPngBytesRef.current ?? await withModalHidden(() => captureEditorScreenshot(editorRef.element))
+        const pngBytes = previewPngBytesRef.current ?? await withModalHidden(() => captureEditorHtml(editorRef.element))
         const path = await save({ filters: [{ name: 'PNG 图片', extensions: ['png'] }], defaultPath: defaultName + '.png' })
         if (!path) { setExporting(false); return }
         await writeFile(path, pngBytes)
       }
 
       setShowExportModal(false)
-    } catch (err) { console.error('导出失败:', err) }
+    } catch (err) {
+      console.error('导出失败:', err)
+      alert('导出失败: ' + (err instanceof Error ? err.message : String(err)))
+    }
     finally { setExporting(false) }
   }, [format, setShowExportModal, withModalHidden])
 
   const handlePreview = useCallback(async () => {
     const editorRef = getEditorRef()
     if (!editorRef) return
-    if (format === 'html' || format === 'pdf') {
-      const container = await renderDocument(cleanExportHtml(editorRef.getHTML()))
-      setPreviewHtml(wrapHtml(container.innerHTML, getSerializedThemeStyle(container), format === 'pdf'))
-      document.body.removeChild(container)
-    } else if (format === 'png') {
-      const pngBytes = await withModalHidden(() => captureEditorScreenshot(editorRef.element))
-      previewPngBytesRef.current = pngBytes
-      setPreviewPng(bytesToDataUrl(pngBytes))
+    try {
+      if (format === 'html' || format === 'pdf') {
+        const container = await renderDocument(cleanExportHtml(editorRef.getHTML()))
+        setPreviewHtml(wrapHtml(container.innerHTML, getSerializedThemeStyle(container), format === 'pdf'))
+        document.body.removeChild(container)
+      } else if (format === 'png') {
+        const pngBytes = await withModalHidden(() => captureEditorHtml(editorRef.element))
+        previewPngBytesRef.current = pngBytes
+        setPreviewPng(bytesToDataUrl(pngBytes))
+      }
+    } catch (err) {
+      console.error('预览失败:', err)
+      alert('预览失败: ' + (err instanceof Error ? err.message : String(err)))
     }
   }, [format, withModalHidden])
 

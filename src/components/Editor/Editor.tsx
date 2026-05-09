@@ -30,6 +30,7 @@ import SlashMenu from './menus/SlashMenu'
 import SearchBar from './menus/SearchBar'
 import { SearchExtension, replaceCurrent, replaceAll } from './plugins/searchPlugin'
 import { matchKeyboardEvent, getKeys, DEFAULT_SHORTCUTS } from '@/components/Modals/shortcuts'
+import { MermaidExtension } from './extensions/MermaidExtension'
 
 const lowlight = createLowlight(common)
 const turndownService = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', emDelimiter: '*', bulletListMarker: '-' })
@@ -82,11 +83,27 @@ const FootnoteRef = Node.create({
     return ['sup', { 'data-footnote-ref': id, contenteditable: 'false' }, `[${id}]`]
   },
 })
+function scrollToAnchor(view: any, anchor: string) {
+  const decoded = decodeURIComponent(anchor)
+  const scroller = view.dom.closest('.overflow-y-auto') as HTMLElement | null
+  let target = view.dom.querySelector(`[id="${CSS.escape(decoded)}"]`) as HTMLElement | null
+  if (!target) {
+    const headings = view.dom.querySelectorAll('h1,h2,h3,h4,h5,h6')
+    for (const h of headings) {
+      if (h.textContent?.trim() === decoded) { target = h; break }
+    }
+  }
+  if (target) scrollElementIntoView(scroller, target)
+}
 const LinkOpener = Extension.create({ name: 'linkOpener', addProseMirrorPlugins() { return [new Plugin({ props: { handleClick: (view, _pos, event) => {
     if (Date.now() < previewSuppressUntil) { event.preventDefault(); return true }
     const t = event.target as HTMLElement
     const a = t.closest('a')
-    if (a?.href?.startsWith('http')) { event.preventDefault(); event.stopPropagation(); import('@tauri-apps/plugin-opener').then((m) => m.openUrl(a!.href)); return true }
+    if (a) {
+      const href = a.getAttribute('href') || ''
+      if (href.startsWith('#')) { event.preventDefault(); scrollToAnchor(view, href.slice(1)); return true }
+      if (href.startsWith('http')) { event.preventDefault(); event.stopPropagation(); import('@tauri-apps/plugin-opener').then((m) => m.openUrl(href)); return true }
+    }
     const i = t.closest('img')
     if (i?.src) { event.preventDefault(); _previewImageSrc.current = i.src; window.dispatchEvent(new CustomEvent(IMAGE_PREVIEW_EVENT)); return true }
     const s = t.closest('sup[data-footnote-ref]')
@@ -140,13 +157,13 @@ const FootnoteInputHandler = Extension.create({ name: 'footnoteInput', addProseM
     view.dispatch(view.state.tr.setSelection(sel))
     return true
   }
-  // Backspace after footnoteRef → select it so next backspace deletes it
+  // Backspace after footnoteRef → delete it directly
   if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
     var prevNode = view.state.doc.nodeAt($from.pos - 1)
     if (prevNode?.type.name === 'footnoteRef') {
       event.preventDefault()
       var trBs = view.state.tr
-      trBs.setSelection(TextSelection.create(view.state.doc, $from.pos - 1, $from.pos))
+      trBs.delete($from.pos - 1, $from.pos)
       view.dispatch(trBs)
       return true
     }
@@ -168,10 +185,11 @@ const FootnoteInputHandler = Extension.create({ name: 'footnoteInput', addProseM
     event.preventDefault()
     var trDef = view.state.tr
     var defStart = $from.pos - textBefore.length
-    trDef.replaceWith(defStart, $from.pos, view.state.schema.nodes.footnote!.create({ id: defMatch[1] }, view.state.schema.text('脚注内容')))
+    var footnoteNode = view.state.schema.nodes.footnote!.create({ id: defMatch[1] }, view.state.schema.text('脚注内容'))
+    trDef.replaceWith(defStart, $from.pos, footnoteNode)
     var newPara = view.state.schema.node('paragraph')
-    trDef.insert(defStart + 1, newPara)
-    trDef.setSelection(TextSelection.near(trDef.doc.resolve(defStart + 2)))
+    trDef.insert(defStart + footnoteNode.nodeSize, newPara)
+    trDef.setSelection(TextSelection.create(trDef.doc, defStart + 2, defStart + 2 + '脚注内容'.length))
     view.dispatch(trDef)
     return true
   }
@@ -182,7 +200,6 @@ const FootnoteInputHandler = Extension.create({ name: 'footnoteInput', addProseM
     var trRef = view.state.tr
     var matchStart = $from.pos - refMatch[0].length
     trRef.replaceWith(matchStart, $from.pos, view.state.schema.nodes.footnoteRef!.create({ id: refMatch[1] }))
-    trRef.insert(matchStart + 1, view.state.schema.node('paragraph'))
     view.dispatch(trRef)
     return true
   }
@@ -251,7 +268,7 @@ function preprocessFootnotes(md: string) {
       break
     }
     const content = chunks.join('\n').trimEnd()
-    out.push(`<div class="footnote-def" data-footnote-id="${encodeHtmlEntities(id)}"><span class="footnote-label" data-footnote-backref="${encodeHtmlEntities(id)}">[${encodeHtmlEntities(id)}]</span> <span class="footnote-content">${marked.parseInline(content || '', { breaks: true, gfm: true, async: false })}</span></div>`)
+    out.push(`<div class="footnote-def" data-footnote-id="${encodeHtmlEntities(id)}"><span class="footnote-label" data-footnote-backref="${encodeHtmlEntities(id)}">[${encodeHtmlEntities(id)}]</span> <span class="footnote-content">${marked.parse(content || '', { breaks: true, gfm: true, async: false }) as string}</span></div>`)
     i = j - 1
   }
   return out.map(function(line) {
@@ -323,6 +340,9 @@ function preprocessMarkdownForEditor(md: string): string {
 function mdToHtml(md: string): string {
   let h = preprocessMarkdownForEditor(md)
   h = h.replace(/==(.+?)==/g, '<mark>$1</mark>')
+  h = h.replace(/```mermaid\n([\s\S]*?)```/g, function(_, code) {
+    return '<div data-mermaid code="' + encodeHtmlEntities(code.trim()) + '"></div>'
+  })
   h = marked.parse(h, { breaks: true, gfm: true, async: false }) as string
   return h
 }
@@ -345,6 +365,7 @@ turndownService.addRule('footnote', { filter: function(n) { return (n as HTMLEle
   return `\n\n[^${id}]: ${first}${rest.map(function(line: string) { return `\n  ${line}` }).join('')}`
 } })
 turndownService.addRule('definitionList', { filter: function(n) { return n.nodeName === 'DL' && (n as HTMLElement).hasAttribute('data-graphite-md') }, replacement: function(_c: string, n: any) { return `\n\n${n.getAttribute('data-graphite-md') || ''}\n\n` } })
+turndownService.addRule('mermaidBlock', { filter: function(n) { return (n as HTMLElement).hasAttribute?.('data-mermaid') ?? false }, replacement: function(_c: string, n: any) { return `\n\n\`\`\`mermaid\n${n.getAttribute('code') || ''}\n\`\`\`\n\n` } })
 
 export default function Editor() {
   const { currentFilePath, currentContent } = useFileStore()
@@ -415,6 +436,7 @@ export default function Editor() {
       TextAlign.configure({ types: ['heading', 'paragraph', 'tableCell', 'tableHeader'] }),
       AtomBackspace, TableHelper, FootnoteNode, FootnoteRef,
       LinkOpener, SlashDetector, LiveMarkdownExtension, FootnoteInputHandler, SearchExtension, CharacterCount,
+      MermaidExtension,
     ],
     editorProps: {
       attributes: { class: 'prose prose-sm max-w-none focus:outline-none px-8 py-6 min-h-full relative' },
@@ -426,7 +448,7 @@ export default function Editor() {
           event.preventDefault()
           var dropCoords = view.posAtCoords({ left: event.clientX, top: event.clientY })
           var pos = dropCoords ? dropCoords.pos : view.state.selection.from
-          for (var i = 0; i < images.length; i++) { handleImageFile(images[i], view, pos); pos += 1 }
+          for (var i = images.length - 1; i >= 0; i--) { handleImageFile(images[i], view, pos) }
           return true
         }
         return false
@@ -448,7 +470,6 @@ export default function Editor() {
     },
     onUpdate: function() {
       if (!readyRef.current) return
-      // Check if content actually changed vs original to avoid false dirty on initial render
       var ed = editor
       if (!ed) return
       var currentMd = serializeEditorContent(ed.getHTML())
@@ -458,8 +479,10 @@ export default function Editor() {
       useFileStore.setState({ isDirty: true })
       setStats({ chars: ed.storage.characterCount.characters(), words: ed.storage.characterCount.words() })
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      var capturedPath = store.currentFilePath
       saveTimerRef.current = setTimeout(function() {
         var s = useFileStore.getState()
+        if (s.currentFilePath !== capturedPath) return
         s.setCurrentContent(currentMd); s.saveCurrentFile('auto-saving')
       }, useEditorSettingsStore.getState().autoSaveDelay)
     },
@@ -538,6 +561,20 @@ export default function Editor() {
       scroller.removeEventListener('scroll', persist)
     }
   }, [editor, currentFilePath])
+
+  useEffect(function() {
+    function handleWheel(e: WheelEvent) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        var store = useEditorSettingsStore.getState()
+        var delta = e.deltaY > 0 ? -1 : 1
+        var newSize = Math.min(36, Math.max(10, store.fontSize + delta))
+        store.setFontSize(newSize)
+      }
+    }
+    document.addEventListener('wheel', handleWheel, { passive: false })
+    return function() { document.removeEventListener('wheel', handleWheel) }
+  }, [])
 
   if (!editor) return null
 

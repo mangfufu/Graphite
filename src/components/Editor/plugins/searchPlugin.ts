@@ -69,6 +69,7 @@ function findAllMatches(
   // Find regex matches in full text and map to doc positions
   let match: RegExpExecArray | null
   while ((match = regex.exec(fullText)) !== null) {
+    if (match[0].length === 0) { regex.lastIndex++; continue }
     const startIdx = match.index
     const endIdx = match.index + match[0].length - 1
     if (startIdx < posFrom.length && endIdx < posTo.length) {

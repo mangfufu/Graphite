@@ -11,17 +11,23 @@ function isStructuralChange(kind: string): boolean {
   return /Create|Remove|Name/.test(kind)
 }
 
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/').toLowerCase()
+}
+
 export function useFileWatcher(rootPath: string | null) {
   useEffect(() => {
     let unlisten: (() => void) | undefined
+    let cancelled = false
 
     const setup = async () => {
       const { invoke } = await import('@tauri-apps/api/core')
+      if (cancelled) return
       unlisten = await listen<FileChangedPayload>('file-changed', async (event) => {
         const store = useFileStore.getState()
         const currentPath = store.currentFilePath
         const { paths, kind } = event.payload
-        const touchesCurrentFile = !!currentPath && paths.some((p) => p === currentPath)
+        const touchesCurrentFile = !!currentPath && paths.some((p) => normalizePath(p) === normalizePath(currentPath))
 
         if (touchesCurrentFile) {
           if (isStructuralChange(kind)) {
@@ -51,6 +57,6 @@ export function useFileWatcher(rootPath: string | null) {
     }
     setup()
 
-    return () => { unlisten?.() }
+    return () => { cancelled = true; unlisten?.() }
   }, [rootPath])
 }

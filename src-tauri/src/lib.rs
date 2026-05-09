@@ -27,6 +27,7 @@ pub fn run() {
             commands::file::rename_file,
             commands::file::delete_file,
             commands::export::export_pdf,
+            commands::export::capture_html_png,
             commands::export::capture_region_png,
             commands::watcher::start_watcher,
             commands::watcher::skip_next_event,

@@ -105,8 +105,41 @@ export async function waitForImages(container: HTMLElement): Promise<void> {
   }))
 }
 
-export async function renderMermaidBlocks(_container: HTMLElement): Promise<void> {
-  return
+export async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
+  const mermaidBlocks = container.querySelectorAll('pre code.language-mermaid, pre code.language-mermaid')
+  if (mermaidBlocks.length === 0) return
+
+  const mermaid = (await import('mermaid')).default
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+    securityLevel: 'loose',
+  })
+
+  let counter = 0
+  for (const block of mermaidBlocks) {
+    const pre = block.parentElement
+    if (!pre) continue
+
+    const code = block.textContent || ''
+    if (!code.trim()) continue
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'mermaid-wrapper'
+
+    try {
+      const id = `mermaid-export-${Date.now()}-${counter++}`
+      const { svg } = await mermaid.render(id, code)
+      wrapper.innerHTML = svg
+      pre.replaceWith(wrapper)
+    } catch (err) {
+      const errorDiv = document.createElement('div')
+      errorDiv.className = 'mermaid-error'
+      errorDiv.textContent = `Mermaid Error: ${err instanceof Error ? err.message : String(err)}`
+      wrapper.appendChild(errorDiv)
+      pre.replaceWith(wrapper)
+    }
+  }
 }
 
 /* ── main render function ─────────────────────────────────── */
@@ -172,14 +205,21 @@ export async function renderDocument(html: string): Promise<HTMLElement> {
     }
   }
 
-  // 4. Inline local images
+  // 4. Render Mermaid blocks
+  try {
+    await renderMermaidBlocks(container)
+  } catch {
+    // Mermaid rendering failed; continue with code blocks
+  }
+
+  // 5. Inline local images
   try {
     await inlineLocalImages(container)
   } catch {
     // Image inlining failed; continue with original src
   }
 
-  // 5. Wait for images to load
+  // 6. Wait for images to load
   try {
     await waitForImages(container)
   } catch {

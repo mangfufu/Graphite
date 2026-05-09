@@ -67,6 +67,8 @@ export const useUIStore = create<UIState>((set) => ({
   setSidebarSearchQuery: (query) => set({ sidebarSearchQuery: query }),
 
   showConfirm: (opts) => {
+    const prev = useUIStore.getState().confirm
+    if (prev.resolve) prev.resolve('cancel')
     return new Promise<'confirm' | 'cancel' | 'save'>((resolve) => {
       set({
         confirm: {

@@ -26,6 +26,13 @@ fn is_text_file(name: &str) -> bool {
 }
 
 fn read_dir_tree(path: &Path) -> std::io::Result<Vec<FileEntry>> {
+    read_dir_tree_inner(path, 0)
+}
+
+fn read_dir_tree_inner(path: &Path, depth: u32) -> std::io::Result<Vec<FileEntry>> {
+    if depth > 32 {
+        return Ok(Vec::new());
+    }
     let mut entries = Vec::new();
     let mut dirs = Vec::new();
     let mut files = Vec::new();
@@ -51,6 +58,11 @@ fn read_dir_tree(path: &Path) -> std::io::Result<Vec<FileEntry>> {
             }
         }
 
+        // Skip symbolic links to avoid infinite loops
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+
         let modified = metadata
             .modified()
             .ok()
@@ -63,7 +75,7 @@ fn read_dir_tree(path: &Path) -> std::io::Result<Vec<FileEntry>> {
             .unwrap_or_default();
 
         if metadata.is_dir() {
-            let children = read_dir_tree(&entry.path())
+            let children = read_dir_tree_inner(&entry.path(), depth + 1)
                 .map_err(|e| { eprintln!("Warning: failed to read subdirectory {:?}: {}", entry.path(), e); e })
                 .unwrap_or_default();
             dirs.push(FileEntry {

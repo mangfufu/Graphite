@@ -28,7 +28,9 @@ const DEFAULTS = {
 function load(key: string, fallback: number): number {
   try {
     const v = localStorage.getItem(key)
-    return v !== null ? parseFloat(v) : fallback
+    if (v === null) return fallback
+    const n = parseFloat(v)
+    return isNaN(n) ? fallback : n
   } catch { return fallback }
 }
 

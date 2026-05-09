@@ -1,72 +1,215 @@
 use std::path::PathBuf;
-use std::process::Command;
+use std::time::Duration;
+use chromiumoxide::Browser;
+use chromiumoxide::browser::BrowserConfig;
+use chromiumoxide::cdp::browser_protocol::page::{PrintToPdfParams, CaptureScreenshotFormat};
+use chromiumoxide::page::ScreenshotParams;
+use futures_util::stream::StreamExt;
+use tauri::{AppHandle, Manager};
 
-/// Find Microsoft Edge installation path by checking common Windows locations.
-fn find_edge() -> Option<PathBuf> {
-    let paths = [
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files (x86)\Microsoft\EdgeCore\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\EdgeCore\Application\msedge.exe",
-    ];
-    for p in &paths {
-        if std::path::Path::new(p).exists() {
-            return Some(PathBuf::from(p));
+const BROWSER_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn find_bundled_chromium(app: &AppHandle) -> Option<PathBuf> {
+    // Check in resource directory (for bundled app)
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let chromium_dir = resource_dir.join("chromium");
+        #[cfg(target_os = "windows")]
+        let path = chromium_dir.join("chrome-win").join("chrome.exe");
+        #[cfg(target_os = "macos")]
+        let path = chromium_dir.join("chrome-mac").join("Chromium.app").join("Contents").join("MacOS").join("Chromium");
+        #[cfg(target_os = "linux")]
+        let path = chromium_dir.join("chrome-linux").join("chrome");
+
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    // Check next to the executable (for development/portable)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let chromium_dir = exe_dir.join("chromium");
+            #[cfg(target_os = "windows")]
+            let path = chromium_dir.join("chrome-win").join("chrome.exe");
+            #[cfg(target_os = "macos")]
+            let path = chromium_dir.join("chrome-mac").join("Chromium.app").join("Contents").join("MacOS").join("Chromium");
+            #[cfg(target_os = "linux")]
+            let path = chromium_dir.join("chrome-linux").join("chrome");
+
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn find_system_browser() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Chromium\Application\chrome.exe",
+            r"C:\Program Files (x86)\Chromium\Application\chrome.exe",
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+        ];
+        for p in &paths {
+            if std::path::Path::new(p).exists() {
+                return Some(PathBuf::from(p));
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let paths = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        ];
+        for p in &paths {
+            if std::path::Path::new(p).exists() {
+                return Some(PathBuf::from(p));
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let names = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "brave-browser"];
+        if let Ok(path) = std::env::var("PATH") {
+            for dir in path.split(':') {
+                for name in &names {
+                    let full = PathBuf::from(dir).join(name);
+                    if full.exists() {
+                        return Some(full);
+                    }
+                }
+            }
         }
     }
     None
 }
 
-/// Export HTML content to PDF using Edge's headless print-to-pdf capability.
-///
-/// This writes the HTML to a temporary file, spawns Edge in headless mode
-/// to convert it to PDF, reads the generated PDF bytes, cleans up temp files,
-/// and returns the bytes to the frontend.
-#[tauri::command]
-pub fn export_pdf(html: String) -> Result<Vec<u8>, String> {
-    let edge_path = find_edge().ok_or_else(|| "Edge not found on this system".to_string())?;
+fn get_browser_path(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(path) = find_bundled_chromium(app) {
+        eprintln!("Using bundled Chromium: {:?}", path);
+        return Ok(path);
+    }
+    if let Some(path) = find_system_browser() {
+        eprintln!("Using system browser: {:?}", path);
+        return Ok(path);
+    }
+    Err("未找到浏览器。请确保应用已正确安装，或系统中安装了 Chrome/Edge。".into())
+}
 
-    // Create temp files with unique names (scoped by process ID)
-    let temp_dir = std::env::temp_dir();
-    let pid = std::process::id();
-    let html_path = temp_dir.join(format!("graphite_export_{}.html", pid));
-    let pdf_path = temp_dir.join(format!("graphite_export_{}.pdf", pid));
+async fn launch_browser(app: &AppHandle) -> Result<(Browser, tokio::task::JoinHandle<()>), String> {
+    let browser_path = get_browser_path(app)?;
 
-    // Write HTML content to a temp file
-    std::fs::write(&html_path, &html).map_err(|e| format!("Failed to write temp HTML file: {}", e))?;
-
-    // Run Edge headless to convert HTML to PDF
-    let result = Command::new(&edge_path)
-        .arg("--headless")
-        .arg(format!("--print-to-pdf={}", pdf_path.display()))
-        .arg("--print-to-pdf-no-header-footer")
-        .arg("--no-printing-headers")
+    let config = BrowserConfig::builder()
+        .chrome_executable(&browser_path)
+        .arg("--headless=new")
         .arg("--no-first-run")
         .arg("--disable-gpu")
         .arg("--disable-extensions")
-        .arg(html_path.to_str().unwrap())
-        .output()
-        .map_err(|e| format!("Failed to launch Edge: {}", e))?;
+        .arg("--no-sandbox")
+        .arg("--disable-dev-shm-usage")
+        .build()
+        .map_err(|e| format!("浏览器配置错误: {e}"))?;
 
-    // Edge --headless can return non-zero exit status even on success,
-    // so we check for PDF file existence instead of relying solely on exit status.
-    if pdf_path.exists() {
-        let pdf_bytes =
-            std::fs::read(&pdf_path).map_err(|e| format!("Failed to read generated PDF: {}", e))?;
+    let (browser, mut handler) = tokio::time::timeout(
+        BROWSER_TIMEOUT,
+        Browser::launch(config)
+    ).await
+        .map_err(|_| "浏览器启动超时".to_string())?
+        .map_err(|e| format!("浏览器启动失败: {e}"))?;
 
-        // Clean up temp files
-        let _ = std::fs::remove_file(&html_path);
-        let _ = std::fs::remove_file(&pdf_path);
+    let handle = tokio::spawn(async move {
+        while handler.next().await.is_some() {}
+    });
 
-        Ok(pdf_bytes)
-    } else {
-        let stderr = String::from_utf8_lossy(&result.stderr);
-        let stdout = String::from_utf8_lossy(&result.stdout);
-        Err(format!(
-            "PDF was not generated.\nEdge stdout: {}\nEdge stderr: {}",
-            stdout, stderr
-        ))
-    }
+    Ok((browser, handle))
+}
+
+async fn cleanup_browser(mut browser: Browser, handle: tokio::task::JoinHandle<()>) {
+    let _ = tokio::time::timeout(Duration::from_secs(5), browser.close()).await;
+    handle.abort();
+}
+
+#[tauri::command]
+pub async fn export_pdf(app: AppHandle, html: String) -> Result<Vec<u8>, String> {
+    let (browser, handle) = launch_browser(&app).await?;
+
+    let result = async {
+        let page = tokio::time::timeout(
+            BROWSER_TIMEOUT,
+            browser.new_page("about:blank")
+        ).await
+            .map_err(|_| "创建页面超时".to_string())?
+            .map_err(|e| format!("创建页面失败: {e}"))?;
+
+        tokio::time::timeout(
+            BROWSER_TIMEOUT,
+            page.set_content(&html)
+        ).await
+            .map_err(|_| "加载内容超时".to_string())?
+            .map_err(|e| format!("加载内容失败: {e}"))?;
+
+        tokio::time::timeout(
+            BROWSER_TIMEOUT,
+            page.pdf(PrintToPdfParams {
+                print_background: Some(true),
+                prefer_css_page_size: Some(true),
+                ..Default::default()
+            })
+        ).await
+            .map_err(|_| "PDF生成超时".to_string())?
+            .map_err(|e| format!("PDF生成失败: {e}"))
+    }.await;
+
+    cleanup_browser(browser, handle).await;
+
+    result
+}
+
+#[tauri::command]
+pub async fn capture_html_png(app: AppHandle, html: String) -> Result<Vec<u8>, String> {
+    let (browser, handle) = launch_browser(&app).await?;
+
+    let result = async {
+        let page = tokio::time::timeout(
+            BROWSER_TIMEOUT,
+            browser.new_page("about:blank")
+        ).await
+            .map_err(|_| "创建页面超时".to_string())?
+            .map_err(|e| format!("创建页面失败: {e}"))?;
+
+        tokio::time::timeout(
+            BROWSER_TIMEOUT,
+            page.set_content(&html)
+        ).await
+            .map_err(|_| "加载内容超时".to_string())?
+            .map_err(|e| format!("加载内容失败: {e}"))?;
+
+        let screenshot_params = ScreenshotParams::builder()
+            .format(CaptureScreenshotFormat::Png)
+            .full_page(true)
+            .build();
+
+        tokio::time::timeout(
+            BROWSER_TIMEOUT,
+            page.screenshot(screenshot_params)
+        ).await
+            .map_err(|_| "截图超时".to_string())?
+            .map_err(|e| format!("截图失败: {e}"))
+    }.await;
+
+    cleanup_browser(browser, handle).await;
+
+    result
 }
 
 #[cfg(target_os = "windows")]
@@ -96,6 +239,10 @@ pub fn capture_region_png(
 
     if width_px <= 0 || height_px <= 0 {
         return Err("Invalid capture size".into());
+    }
+
+    if width_px > 16384 || height_px > 16384 {
+        return Err("Capture size too large (max 16384px)".into());
     }
 
     let mut origin = POINT { x: 0, y: 0 };

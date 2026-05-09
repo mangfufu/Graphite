@@ -134,9 +134,9 @@ export default function SettingsModal() {
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-5">
           {activeTab === 'editor' && (
             <>
-              <NumberInput label="字体大小 (px)" value={fontSize} min={12} max={24} step={1} onChange={setFontSize} />
-              <NumberInput label="行距" value={lineSpacing} min={1.0} max={2.5} step={0.1} onChange={setLineSpacing} />
-              <NumberInput label="最大宽度 (px)" value={maxWidth} min={500} max={1200} step={10} onChange={setMaxWidth} />
+              <NumberInput label="字体大小 (px)" value={fontSize} min={10} max={36} step={1} onChange={setFontSize} />
+              <NumberInput label="行距" value={lineSpacing} min={1.0} max={3.0} step={0.1} onChange={setLineSpacing} />
+              <NumberInput label="最大宽度 (px)" value={maxWidth} min={400} max={1600} step={10} onChange={setMaxWidth} />
               <NumberInput label="自动保存 (秒)" value={Math.round(autoSaveDelay / 1000)} min={5} max={600} step={5} onChange={(v) => setAutoSaveDelay(v * 1000)} />
             </>
           )}

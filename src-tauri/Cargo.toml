@@ -26,3 +26,9 @@ windows = { version = "0.61.3", features = [
   "Win32_Graphics_Gdi",
   "Win32_UI_WindowsAndMessaging",
 ] }
+chromiumoxide = { version = "0.7", features = ["tokio-runtime"] }
+tokio = { version = "1", features = ["rt", "time"] }
+futures-util = "0.3"
+dirs = "6"
+reqwest = { version = "0.12", features = ["rustls-tls", "blocking"] }
+zip = "2"

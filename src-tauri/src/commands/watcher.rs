@@ -34,7 +34,7 @@ pub fn start_watcher(app: AppHandle, path: String) -> Result<(), String> {
         if let Ok(event) = res {
             let app = app_handle.clone();
             let skip = app.state::<SkipSet>();
-            let mut guard = skip.0.lock().unwrap();
+            let mut guard = skip.0.lock().unwrap_or_else(|e| e.into_inner());
 
             // Prune expired entries before checking
             let now = Instant::now();
@@ -68,7 +68,7 @@ pub fn start_watcher(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| format!("{}", e))?;
 
     let state = app.state::<WatcherState>();
-    *state.0.lock().unwrap() = Some(watcher);
+    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
 
     Ok(())
 }
@@ -78,7 +78,7 @@ pub fn skip_next_event(path: String, state: tauri::State<'_, SkipSet>) -> Result
     state
         .0
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .insert(PathBuf::from(path), Instant::now() + Duration::from_secs(1));
     Ok(())
 }
