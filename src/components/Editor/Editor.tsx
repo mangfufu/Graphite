@@ -349,6 +349,7 @@ function mdToHtml(md: string): string {
 
 function htmlToMd(html: string): string {
   var div = document.createElement('div'); div.innerHTML = html
+  div.querySelectorAll('colgroup, col').forEach(function(el) { el.remove() })
   return finalizeMarkdown(turndownService.turndown(div.innerHTML))
 }
 

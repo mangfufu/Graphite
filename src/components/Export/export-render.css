@@ -15,7 +15,7 @@
   max-width: var(--editor-max-width, 720px);
   margin: 0 auto;
   padding: 1.5rem 2rem;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /*
@@ -328,6 +328,7 @@
   border-color: var(--border, #e5e5e5);
   width: 100%;
   margin: 0.75em 0;
+  table-layout: auto;
 }
 
 .export-render th,
@@ -337,11 +338,13 @@
   border: 1px solid var(--border, #e5e5e5) !important;
   padding: 6px 12px;
   text-align: left;
+  word-break: keep-all;
 }
 
 .export-render th {
   background: var(--bg-secondary, #f5f5f5);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ---- Images ---- */

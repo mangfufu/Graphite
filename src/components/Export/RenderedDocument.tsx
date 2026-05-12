@@ -228,7 +228,7 @@ export async function renderDocument(html: string): Promise<HTMLElement> {
 
   // Position off-screen for capture
   container.style.position = 'absolute'
-  container.style.left = '0'
+  container.style.left = '-9999px'
   container.style.top = '-9999px'
   container.style.width = '720px'
   container.style.height = 'auto'

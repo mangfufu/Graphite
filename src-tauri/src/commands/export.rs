@@ -158,6 +158,9 @@ pub async fn export_pdf(app: AppHandle, html: String) -> Result<Vec<u8>, String>
             .map_err(|_| "加载内容超时".to_string())?
             .map_err(|e| format!("加载内容失败: {e}"))?;
 
+        // Wait for rendering to complete
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
         tokio::time::timeout(
             BROWSER_TIMEOUT,
             page.pdf(PrintToPdfParams {
@@ -193,6 +196,9 @@ pub async fn capture_html_png(app: AppHandle, html: String) -> Result<Vec<u8>, S
         ).await
             .map_err(|_| "加载内容超时".to_string())?
             .map_err(|e| format!("加载内容失败: {e}"))?;
+
+        // Wait for rendering to complete
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         let screenshot_params = ScreenshotParams::builder()
             .format(CaptureScreenshotFormat::Png)

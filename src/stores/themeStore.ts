@@ -97,7 +97,7 @@ function loadStoredValue<T>(key: string, fallback: T, valid?: T[]): T {
   return fallback
 }
 
-const initialMode: ThemeMode = loadStoredValue<ThemeMode>('graphite-theme', 'system', ['light', 'dark', 'system'])
+const initialMode: ThemeMode = loadStoredValue<ThemeMode>('graphite-theme', 'light', ['light', 'dark', 'system'])
 const initialTheme: Theme = loadStoredValue<Theme>('graphite-theme-variant', 'default', VALID_THEMES)
 
 applyTheme(initialMode, initialTheme)
