@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicoulaj/tauri-plugin-schema/v2/schemas/config.schema.json",
   "productName": "Graphite",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "identifier": "com.graphite.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -19,7 +19,8 @@
         "minHeight": 400,
         "decorations": false,
         "transparent": false,
-        "center": true
+        "center": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

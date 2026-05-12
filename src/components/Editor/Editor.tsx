@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { Extension, Node, InputRule, markInputRule } from '@tiptap/core'
-import { Plugin, TextSelection } from '@tiptap/pm/state'
+import { Plugin, TextSelection, NodeSelection } from '@tiptap/pm/state'
 import { EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table'
@@ -105,8 +105,7 @@ const LinkOpener = Extension.create({ name: 'linkOpener', addProseMirrorPlugins(
       if (href.startsWith('#')) { event.preventDefault(); scrollToAnchor(view, href.slice(1)); return true }
       if (href.startsWith('http')) { event.preventDefault(); event.stopPropagation(); import('@tauri-apps/plugin-opener').then((m) => m.openUrl(href)); return true }
     }
-    const i = t.closest('img')
-    if (i?.src) { event.preventDefault(); _previewImageSrc.current = i.src; window.dispatchEvent(new CustomEvent(IMAGE_PREVIEW_EVENT)); return true }
+
     const s = t.closest('sup[data-footnote-ref]')
     if (s?.hasAttribute?.('data-footnote-ref')) { event.preventDefault(); const id = s.getAttribute('data-footnote-ref'); if (id) scrollToFootnoteDef(view, id); return true }
     const l = t.closest('.footnote-label[data-footnote-backref]')
@@ -378,6 +377,7 @@ export default function Editor() {
   const [stats, setStats] = useState({ chars: 0, words: 0 })
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const readyRef = useRef(false)
+  const editorDragRef = useRef<{ isDragging: boolean; imageNode: any; imagePos: number; imageNodeSize: number; startX: number; startY: number } | null>(null)
 
   const processedHtml = useMemo(function() {
     if (!currentContent) return ''
@@ -442,18 +442,90 @@ export default function Editor() {
     ],
     editorProps: {
       attributes: { class: 'prose prose-sm max-w-none focus:outline-none px-8 py-6 min-h-full relative' },
+      handleDOMEvents: {
+        mousedown: function(view: EditorView, event: MouseEvent) {
+          var target = event.target as HTMLElement
+          var img = target.closest('img')
+          if (!img || !view.dom.contains(img)) return false
+          var pos = view.posAtDOM(img, 0)
+          var resolved = view.state.doc.resolve(pos)
+          if (resolved.nodeAfter?.type.name !== 'image') return false
+          var dragState = { isDragging: false, imageNode: resolved.nodeAfter, imagePos: pos, imageNodeSize: resolved.nodeAfter.nodeSize, startX: event.clientX, startY: event.clientY }
+          editorDragRef.current = dragState
+          var onMove = function(e: MouseEvent) {
+            if (editorDragRef.current !== dragState) { document.removeEventListener('mousemove', onMove); return }
+            if (Math.hypot(e.clientX - dragState.startX, e.clientY - dragState.startY) > 5) {
+              dragState.isDragging = true
+              view.dispatch(view.state.tr.setSelection(new NodeSelection(view.state.doc.resolve(dragState.imagePos))))
+              document.removeEventListener('mousemove', onMove)
+            }
+          }
+          var onUp = function() { document.removeEventListener('mousemove', onMove) }
+          document.addEventListener('mousemove', onMove)
+          document.addEventListener('mouseup', onUp, { once: true } as any)
+          return false
+        },
+        mouseup: function(view: EditorView, event: MouseEvent) {
+          var dragState = editorDragRef.current
+          if (!dragState) return false
+          editorDragRef.current = null
+          if (dragState.isDragging) {
+            var dropPos = view.posAtCoords({ left: event.clientX, top: event.clientY })
+            if (dropPos) {
+              var nodeSize = dragState.imageNodeSize
+              var oldPos = dragState.imagePos
+              var newPos = dropPos.pos
+              if (newPos > oldPos) newPos -= nodeSize
+              var tr = view.state.tr
+              tr.delete(oldPos, oldPos + nodeSize)
+              tr.insert(newPos, dragState.imageNode)
+              view.dispatch(tr)
+              return true
+            }
+          } else {
+            var img = (event.target as HTMLElement).closest('img')
+            if (img?.src) {
+              event.preventDefault()
+              _previewImageSrc.current = img.src
+              window.dispatchEvent(new CustomEvent(IMAGE_PREVIEW_EVENT))
+              return true
+            }
+          }
+          return false
+        },
+        dragstart: function(_view: EditorView, _event: DragEvent) {
+          editorDragRef.current = null
+          return false
+        },
+      },
       handleDrop: function(view: EditorView, event: DragEvent, _slice: any, moved: boolean) {
+        if (moved) return false
         var files = event.dataTransfer?.files
-        if (!moved && files?.length) {
-          var images = Array.from(files).filter(function(f: any) { return f.type.startsWith('image/') })
-          if (!images.length) return false
-          event.preventDefault()
-          var dropCoords = view.posAtCoords({ left: event.clientX, top: event.clientY })
-          var pos = dropCoords ? dropCoords.pos : view.state.selection.from
-          for (var i = images.length - 1; i >= 0; i--) { handleImageFile(images[i], view, pos) }
+        if (!files?.length) return false
+        event.preventDefault()
+        var fileArray = Array.from(files)
+        var firstFile = fileArray[0] as any
+        if (firstFile.path) {
+          var w = (window as any).__graphiteOpenFile
+          if (w) w(firstFile.path)
           return true
         }
-        return false
+        var images = fileArray.filter(function(f: any) { return f.type.startsWith('image/') })
+        if (images.length > 0) {
+          var dropCoords = view.posAtCoords({ left: event.clientX, top: event.clientY })
+          var pos = dropCoords ? dropCoords.pos : view.state.selection.from
+          for (var i = 0; i < images.length; i++) { handleImageFile(images[i], view, pos) }
+        }
+        var docFiles = fileArray.filter(function(f: any) { return /\.(md|html?|txt)$/i.test(f.name) })
+        docFiles.forEach(function(f: any) {
+          var reader = new FileReader()
+          reader.onload = function() {
+            useFileStore.getState().setCurrentContent(reader.result as string)
+            useFileStore.getState().markEdited()
+          }
+          reader.readAsText(f)
+        })
+        return true
       },
       handlePaste: function(view: EditorView, event: ClipboardEvent) {
         var items = event.clipboardData?.items
@@ -494,6 +566,37 @@ export default function Editor() {
 
   useEffect(function() { if (!editor) return; (window as any).__graphiteEditor = new Proxy(editor, { get(t, p) { if (p === "element") return t.view?.dom || t.options?.element; return Reflect.get(t, p) } }); window.dispatchEvent(new CustomEvent('graphite:editor-ready')); return function() { (window as any).__graphiteEditor = undefined } }, [editor])
   useEffect(function() { (window as any).__graphiteSave = handleSave }, [handleSave])
+  useEffect(function() {
+    (window as any).__graphiteOpenFile = function(path: string) { useFileStore.getState().openFile(path).catch(function() {}) }
+    return function() { (window as any).__graphiteOpenFile = undefined }
+  }, [])
+  useEffect(function() {
+    if (!editor) return
+    var container = editor.view.dom.closest('.flex-1') as HTMLElement | null
+    if (!container) return
+    var dropContainer: HTMLElement = container
+    function onDrop(e: DragEvent) {
+      var dt = e.dataTransfer
+      if (!dt?.files?.length) return
+      var fileArray = Array.from(dt.files)
+      var docFiles = fileArray.filter(function(f) { return /\.(md|html?|txt)$/i.test(f.name) })
+      var images = fileArray.filter(function(f) { return f.type.startsWith('image/') })
+      if ((docFiles.length > 0 || images.length > 0) && e.target && (e.target as HTMLElement).closest && !(e.target as HTMLElement).closest('.ProseMirror')) {
+        e.preventDefault()
+        var curPos = editor!.state.selection.from
+        images.forEach(function(f: any) { handleImageFile(f, editor!.view, curPos) })
+        docFiles.forEach(function(f) {
+          var r = new FileReader()
+          r.onload = function() { useFileStore.getState().setCurrentContent(r.result as string); useFileStore.getState().markEdited() }
+          r.readAsText(f)
+        })
+      }
+    }
+    function onDragOver(e: DragEvent) { e.preventDefault() }
+    dropContainer.addEventListener('dragover', onDragOver)
+    dropContainer.addEventListener('drop', onDrop)
+    return function() { dropContainer.removeEventListener('dragover', onDragOver); dropContainer.removeEventListener('drop', onDrop) }
+  }, [editor])
 
   useEffect(function() {
     function fn(e: KeyboardEvent) {

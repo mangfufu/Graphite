@@ -235,18 +235,6 @@ export default function Toolbar({ editor, onSearchToggle }: ToolbarProps) {
     },
   ]
 
-  // Image alignment controls (show when an image is selected)
-  if (editor.isActive("image")) {
-    const imgAlign = editor.getAttributes("paragraph").textAlign || "left"
-    groups.push({
-      buttons: [
-        { label: "⬒", action: () => editor.chain().focus().setTextAlign("left").run(), active: imgAlign === "left", title: "左对齐" },
-        { label: "⬔", action: () => editor.chain().focus().setTextAlign("center").run(), active: imgAlign === "center", title: "居中" },
-        { label: "⬓", action: () => editor.chain().focus().setTextAlign("right").run(), active: imgAlign === "right", title: "右对齐" },
-      ],
-    })
-  }
-
   return (
     <div className="flex items-center gap-0.5 pl-3 pr-2 min-h-[var(--titlebar-height)] border-b border-[var(--border)] bg-[var(--bg-secondary)] shrink-0 relative flex-wrap">
       {onSearchToggle && (
