@@ -26,6 +26,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useEditorSettingsStore } from '@/stores/editorStore'
 import { saveSessionCursor, loadSessionCursor, saveSessionScroll, loadSessionScroll } from '@/hooks/useSession'
 import Toolbar from './menus/Toolbar'
+import TabBar from './TabBar'
 import SlashMenu from './menus/SlashMenu'
 import SearchBar from './menus/SearchBar'
 import { SearchExtension, replaceCurrent, replaceAll } from './plugins/searchPlugin'
@@ -582,6 +583,7 @@ export default function Editor() {
   return (
     <div className="flex flex-col h-full">
       <Toolbar editor={editor} onSearchToggle={function() { setShowSearch(function(p) { return !p }) }} />
+      <TabBar />
       <div className={`flex-1 overflow-y-auto bg-[var(--bg-primary)] ${previewImage ? 'pointer-events-none' : ''}`}>
         {showSearch && <SearchBar editor={editor} onClose={function() { setShowSearch(false) }} onReplace={function(t) { replaceCurrent(editor.view, t) }} onReplaceAll={function(t) { replaceAll(editor.view, t) }} />}
         <div className="max-w-[var(--editor-max-width)] mx-auto min-h-full">

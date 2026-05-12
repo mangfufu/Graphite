@@ -54,6 +54,23 @@ export default function App() {
   // Ensure theme is applied on mount
   useThemeStore.getState()
 
+  // Handle OS "open with" file association
+  useEffect(function() {
+    // Expose function for Rust single-instance plugin to call
+    (window as any).__graphiteOpenFile = function(path: string) {
+      useFileStore.getState().loadDirectory(path.replace(/[\\/][^\\/]+$/, '')).then(function() {
+        useFileStore.getState().openFile(path, { skipDirtyCheck: true })
+      })
+    }
+    // Query file path from first instance startup
+    import('@tauri-apps/api/core').then(function(core) {
+      core.invoke<string>('get_opened_file').then(function(path) {
+        if (path) (window as any).__graphiteOpenFile(path)
+      })
+    })
+    return function() { delete (window as any).__graphiteOpenFile }
+  }, [])
+
   // Watch for file changes
   useFileWatcher(rootPath)
 

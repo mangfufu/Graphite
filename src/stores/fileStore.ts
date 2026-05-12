@@ -148,6 +148,7 @@ interface FileState {
   currentContent: string | null
   originalContent: string | null
   isDirty: boolean
+  openTabs: string[]
   userEdited: boolean
   saveStatus: 'saved' | 'unsaved' | 'saving' | 'auto-saving'
   loading: boolean
@@ -156,6 +157,10 @@ interface FileState {
   loadDirectory: (path: string) => Promise<void>
   refreshDirectory: () => Promise<void>
   openFile: (path: string, opts?: { skipDirtyCheck?: boolean }) => Promise<void>
+  closeTab: (path: string) => Promise<void>
+  closeTabs: (mode: 'current' | 'left' | 'right' | 'all', path: string) => Promise<void>
+  reorderTabs: (tabs: string[]) => void
+  switchTab: (path: string) => Promise<void>
   saveCurrentFile: (mode?: 'saving' | 'auto-saving') => Promise<void>
   setCurrentContent: (content: string) => void
   markEdited: () => void
@@ -173,6 +178,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   currentContent: null,
   originalContent: null,
   isDirty: false,
+  openTabs: [],
   userEdited: false,
   saveStatus: 'saved' as const,
   loading: false,
@@ -265,18 +271,44 @@ export const useFileStore = create<FileState>((set, get) => ({
       const content = await invoke<string>('read_file', { path })
       saveFileToStorage(path)
       addRecentFile(path, path.split(/[\\/]/).pop() || path, get().rootPath)
-      set({
-        currentFilePath: path,
-        currentContent: content,
-        originalContent: content,
-        isDirty: false,
-        saveStatus: 'saved' as const,
-        loading: false,
+      set(function(st: any) {
+        var tabs = st.openTabs || []
+        if (!tabs.includes(path)) tabs = [...tabs, path]
+        return {
+          currentFilePath: path,
+          currentContent: content,
+          originalContent: content,
+          isDirty: false,
+          saveStatus: 'saved' as const,
+          loading: false,
+          openTabs: tabs,
+        }
       })
     } catch (err: any) {
       set({ error: String(err), loading: false })
       throw err
     }
+  },
+
+  closeTab: async function(path: string) {
+    var st = get()
+    var tabs = (st.openTabs || []).filter(function(p: string) { return p !== path })
+    if (path === st.currentFilePath) {
+      var nextPath = tabs.length > 0 ? tabs[tabs.length - 1] : null
+      if (nextPath) {
+        await get().openFile(nextPath, { skipDirtyCheck: true })
+      } else {
+        set({ currentFilePath: null, currentContent: null, originalContent: null, isDirty: false, openTabs: [] })
+      }
+    }
+    set({ openTabs: tabs })
+    try { localStorage.removeItem(STORAGE_KEY_FILE) } catch {}
+  },
+
+  switchTab: async function(path: string) {
+    var st = get()
+    if (path === st.currentFilePath) return
+    await st.openFile(path, { skipDirtyCheck: true })
   },
 
   saveCurrentFile: async (mode: 'saving' | 'auto-saving' = 'saving') => {
@@ -321,12 +353,33 @@ export const useFileStore = create<FileState>((set, get) => ({
     if (state.currentFilePath !== oldPath) return
     saveFileToStorage(newPath)
     addRecentFile(newPath, newPath.split(/[\\/]/).pop() || newPath, state.rootPath)
-    set({ currentFilePath: newPath })
+    var tabs = (get().openTabs || []).map(function(p: string) { return p === oldPath ? newPath : p })
+    set({ currentFilePath: newPath, openTabs: tabs })
   },
 
+  reorderTabs: function(tabs: string[]) {
+    set({ openTabs: tabs })
+  },
+  closeTabs: async function(mode: 'current' | 'left' | 'right' | 'all', path: string) {
+    var st = get()
+    var tabs = st.openTabs || []
+    var idx = tabs.indexOf(path)
+    if (mode === 'all') { set({ currentFilePath: null, currentContent: null, originalContent: null, isDirty: false, openTabs: [] }); return }
+    if (mode === 'current') { await get().closeTab(path); return }
+    var keep: string[] = []
+    for (var i = 0; i < tabs.length; i++) {
+      if (mode === 'left' && i >= idx) keep.push(tabs[i])
+      else if (mode === 'right' && i <= idx) keep.push(tabs[i])
+    }
+    if (!keep.includes(st.currentFilePath!)) await get().closeTab(tabs[idx > 0 ? idx - 1 : 1] || '')
+    set({ openTabs: keep })
+  },
   clearCurrentFileIfMatches: (path: string) => {
     const state = get()
-    if (state.currentFilePath !== path) return
+    var tabs = (state.openTabs || []).filter(function(p: string) { return p !== path })
+    if (state.currentFilePath !== path) {
+      set({ openTabs: tabs }); return
+    }
     try { localStorage.removeItem(STORAGE_KEY_FILE) } catch {}
     set({
       currentFilePath: null,
@@ -334,6 +387,7 @@ export const useFileStore = create<FileState>((set, get) => ({
       originalContent: null,
       isDirty: false,
       saveStatus: 'saved',
+      openTabs: tabs,
     })
   },
 
